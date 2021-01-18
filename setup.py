@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
+import os, path
 from io import open
 
 from setuptools import setup, find_packages, Command
@@ -50,7 +50,7 @@ def load_requirements(path_dir=PATH_ROOT, comment_char="#"):
         lines = [ln.strip() for ln in file.readlines()]
     reqs = []
     for ln in lines:
-        # filer all comments
+        # filter all comments
         if comment_char in ln:
             ln = ln[: ln.index(comment_char)]
         if ln:  # if requirement is not empty
@@ -58,16 +58,24 @@ def load_requirements(path_dir=PATH_ROOT, comment_char="#"):
     return reqs
 
 
+def load_readme(path_dir=PATH_ROOT):
+    with open(path.join(path_dir, "README.md"), encoding="utf-8") as f:
+        long_description = f.read()
+    return long_description
+
+
 setup(
     name="stochman",
     version=stochman.__version__,
     description=stochman.__docs__,
+    long_description=load_readme(PATH_ROOT),
     author=stochman.__author__,
     author_email=stochman.__author_email__,
     license=stochman.__license__,
-    packages=find_packages(),
+    packages=find_packages(exclude=["tests", "tests/*"]),
     python_requires=">=3.8",
     install_requires=load_requirements(PATH_ROOT),
+    download_url="https://github.com/CenterBioML/stochman/archive/0.1.0.zip",
     classifiers=[
         "Environment :: Console",
         "Natural Language :: English",

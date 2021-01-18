@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Copyright The GeoML Team
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,10 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os, path
+import os
 from io import open
 
-from setuptools import setup, find_packages, Command
+from setuptools import Command, find_packages, setup
 
 try:
     import builtins
@@ -45,21 +46,8 @@ class CleanCommand(Command):
 PATH_ROOT = os.path.dirname(__file__)
 
 
-def load_requirements(path_dir=PATH_ROOT, comment_char="#"):
-    with open(os.path.join(path_dir, "requirements.txt"), "r") as file:
-        lines = [ln.strip() for ln in file.readlines()]
-    reqs = []
-    for ln in lines:
-        # filter all comments
-        if comment_char in ln:
-            ln = ln[: ln.index(comment_char)]
-        if ln:  # if requirement is not empty
-            reqs.append(ln)
-    return reqs
-
-
 def load_readme(path_dir=PATH_ROOT):
-    with open(path.join(path_dir, "README.md"), encoding="utf-8") as f:
+    with open(os.path.join(path_dir, "README.md"), encoding="utf-8") as f:
         long_description = f.read()
     return long_description
 
@@ -69,12 +57,13 @@ setup(
     version=stochman.__version__,
     description=stochman.__docs__,
     long_description=load_readme(PATH_ROOT),
+    long_description_content_type="text/markdown",
     author=stochman.__author__,
     author_email=stochman.__author_email__,
     license=stochman.__license__,
     packages=find_packages(exclude=["tests", "tests/*"]),
     python_requires=">=3.8",
-    install_requires=load_requirements(PATH_ROOT),
+    install_requires=["torch>=1.6", "numpy>=1.16.4"],
     download_url="https://github.com/CenterBioML/stochman/archive/0.1.0.zip",
     classifiers=[
         "Environment :: Console",

@@ -1,17 +1,4 @@
 #!/usr/bin/env python
-# Copyright The GeoML Team
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import os
 from io import open
 
@@ -43,27 +30,26 @@ class CleanCommand(Command):
         os.system("rm -vrf ./build ./dist ./*.pyc ./*.tgz ./*.egg-info")
 
 
-PATH_ROOT = os.path.dirname(__file__)
+with open("README.md", encoding="utf-8") as f:
+    long_description = f.read()
 
 
-def load_readme(path_dir=PATH_ROOT):
-    with open(os.path.join(path_dir, "README.md"), encoding="utf-8") as f:
-        long_description = f.read()
-    return long_description
+with open("requirements.txt", "r") as reqs:
+    requirements = reqs.read().split()
 
 
 setup(
-    name="stochman",
+    name=stochman.__name__,
     version=stochman.__version__,
     description=stochman.__docs__,
-    long_description=load_readme(PATH_ROOT),
+    long_description=long_description,
     long_description_content_type="text/markdown",
     author=stochman.__author__,
     author_email=stochman.__author_email__,
     license=stochman.__license__,
     packages=find_packages(exclude=["tests", "tests/*"]),
-    python_requires=">=3.8",
-    install_requires=["torch>=1.6", "numpy>=1.16.4"],
+    python_requires=">=3.6",
+    install_requires=requirements,
     download_url="https://github.com/CenterBioML/stochman/archive/0.1.0.zip",
     classifiers=[
         "Environment :: Console",
@@ -81,4 +67,5 @@ setup(
         # that you indicate whether you support Python 2, Python 3 or both.
         "Programming Language :: Python :: 3.8",
     ],
+    cmdclass={"clean": CleanCommand},
 )

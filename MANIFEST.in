@@ -1,0 +1,14 @@
+# Include the README and CHANGELOG
+include *.md
+
+# Include the license file
+include LICENSE
+
+# exclude tests from package
+recursive-exclude tests *
+exclude tests
+
+# Include the requirements
+include requirements.txt
+#include requirements_tests.txt
+include pyproject.toml

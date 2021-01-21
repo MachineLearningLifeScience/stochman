@@ -15,7 +15,7 @@ __license__ = "Apache-2.0"
 __copyright__ = f"Copyright (c) 2018-{_this_year}, {__author__}."
 __homepage__ = "https://github.com/CenterBioML/stochman"
 __docs__ = (
-    "StochMan is a collection of elementary algorithms for" 
+    "StochMan is a collection of elementary algorithms for"
     " computations on random manifolds"
 )
 # fmt: on
@@ -41,5 +41,4 @@ if __STOCHMAN_SETUP__:
     # We are not importing the rest of the package during the build process, as it may not be compiled yet
 else:
     # import from package here
-    from .manifolds import Manifold
-    from .optimizers import RiemSGD
+    from . import nnj

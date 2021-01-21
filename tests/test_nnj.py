@@ -1,9 +1,9 @@
-import pytest
-
-import torch
 import numpy
+import pytest
+import torch
 
 from stochman import nnj
+
 
 def _fd_jacobian(function, x, h=1e-4):
     """Compute finite difference Jacobian of given function
@@ -76,7 +76,9 @@ _models = [
     nnj.Sequential(nnj.Softplus(), nnj.Sigmoid(), nnj.Linear(_in_features, 3)),
     nnj.Sequential(nnj.Softplus(), nnj.Sigmoid()),
     nnj.Sequential(nnj.Linear(_in_features, 3), nnj.OneMinusX()),
-    nnj.Sequential(nnj.PosLinear(_in_features, 2), nnj.Softplus(beta=100, threshold=5), nnj.PosLinear(2, 4), nnj.Tanh()),
+    nnj.Sequential(
+        nnj.PosLinear(_in_features, 2), nnj.Softplus(beta=100, threshold=5), nnj.PosLinear(2, 4), nnj.Tanh()
+    ),
     nnj.Sequential(nnj.PosLinear(_in_features, 5), nnj.Reciprocal(b=1.0)),
     nnj.Sequential(nnj.ReLU(), nnj.ELU(), nnj.LeakyReLU(), nnj.Sigmoid(), nnj.Softplus(), nnj.Tanh()),
     nnj.Sequential(nnj.ReLU()),
@@ -97,9 +99,10 @@ _models = [
     ),
 ]
 
+
 @pytest.mark.parametrize("model", _models)
 def test_jacobians(model):
-    """ Test that the analytical jacobian of the model is consistent with finite
+    """Test that the analytical jacobian of the model is consistent with finite
     order approximation
     """
     J, Jnum = _jacobian_check(model, _in_features)

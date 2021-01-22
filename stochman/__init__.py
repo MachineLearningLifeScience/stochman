@@ -33,13 +33,15 @@ try:
 except NameError:
     __STOCHMAN_SETUP__: bool = False
 
-
-if __STOCHMAN_SETUP__:
-    import sys  # pragma: no-cover
-
-    sys.stdout.write(f"Partial import of `{__name__}` during the build process.\n")  # pragma: no-cover
+if __STOCHMAN_SETUP__:   # pragma: no cover
+    import sys  
+    sys.stdout.write(f"Partial import of `{__name__}` during the build process.\n")
     # We are not importing the rest of the package during the build process, as it may not be compiled yet
 else:
-    # import from package here
+    # import modules
     from . import nnj
     from . import curves
+    
+    # import classes for direct access
+    from .curves import DiscreteCurve, CubicSpline
+    

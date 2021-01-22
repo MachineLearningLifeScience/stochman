@@ -138,7 +138,10 @@ class Sequential(nn.Sequential):
                 x = val
 
             x = x.view(xsh[:-1] + torch.Size([x.shape[-1]]))
-            Jseq = Jseq.view(xsh[:-1] + Jseq.shape[-2:])
+            if JseqType is JacType.DIAG:
+                Jseq = Jseq.view(xsh[:-1] + Jseq.shape[-1:])
+            else:
+                Jseq = Jseq.view(xsh[:-1] + Jseq.shape[-2:])
 
             if return_jac_type:
                 return x, Jseq, JseqType
@@ -357,7 +360,7 @@ class Reciprocal(nn.Module, ActivationJacobian):
         super().__init__()
         self.b = b
 
-    def forward(self, x: torch.Tensor, jacobian=False):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
         val = 1.0 / (x + self.b)
 
         if jacobian:
@@ -375,7 +378,7 @@ class OneMinusX(nn.Module, ActivationJacobian):
     def __init__(self):
         super().__init__()
 
-    def forward(self, x: torch.Tensor, jacobian=False):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
         val = 1 - x
 
         if jacobian:
@@ -388,7 +391,7 @@ class OneMinusX(nn.Module, ActivationJacobian):
         J = -torch.ones_like(x)
         return J, JacType.DIAG
 
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq, JseqType: JacType):
+    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType):
         return -Jseq, JseqType
 
 
@@ -396,7 +399,7 @@ class Sqrt(nn.Module, ActivationJacobian):
     def __init__(self):
         super().__init__()
 
-    def forward(self, x: torch.Tensor, jacobian=False):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
         val = torch.sqrt(x)
 
         if jacobian:

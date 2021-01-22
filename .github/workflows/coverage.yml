@@ -1,4 +1,4 @@
-name: "Run tests"
+name: "Run coverage"
 
 on:
   push:
@@ -27,7 +27,9 @@ jobs:
       run: |
         python setup.py install sdist bdist_wheel
         twine check dist/*
-    - name: Test with pytest
-      run: |
-        pip install pytest
-        pytest -v
+    - name: Install and run coverage
+      run |
+        pip install coverage
+        coverage run -m pytest
+        coverage report -m
+        coverage report

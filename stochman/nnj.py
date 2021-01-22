@@ -182,7 +182,11 @@ class Sequential(nn.Sequential):
     def dimensions(self):
         in_features, out_features = None, None
         for module in self._modules.values():
-            if in_features is None and hasattr(module, "__constants__") and "in_features" in module.__constants__:
+            if (
+                in_features is None
+                and hasattr(module, "__constants__")
+                and "in_features" in module.__constants__
+            ):
                 in_features = module.in_features
             if hasattr(module, "__constants__") and "out_features" in module.__constants__:
                 out_features = module.out_features
@@ -349,7 +353,9 @@ class ArcTanh(ActivationJacobian, nn.Tanh):
         super().__init__()
 
     def forward(self, x: torch.Tensor, jacobian: bool = False):
-        xc = x.clamp(-(1 - 1e-4), 1 - 1e-4)  # the inverse is only defined on [-1, 1] so we project onto this interval
+        xc = x.clamp(
+            -(1 - 1e-4), 1 - 1e-4
+        )  # the inverse is only defined on [-1, 1] so we project onto this interval
         val = (
             0.5 * (1.0 + xc).log() - 0.5 * (1.0 - xc).log()
         )  # XXX: is it stable to compute log((1+xc)/(1-xc)) ? (that would be faster)
@@ -516,7 +522,11 @@ class Norm2(nn.Module):
 
 class RBF(nn.Module):
     def __init__(
-        self, dim: int, num_points: int, points: Optional[torch.Tensor] = None, beta: Union[torch.Tensor, float] = 1.0
+        self,
+        dim: int,
+        num_points: int,
+        points: Optional[torch.Tensor] = None,
+        beta: Union[torch.Tensor, float] = 1.0,
     ):
         super().__init__()
         if points is None:
@@ -529,7 +539,9 @@ class RBF(nn.Module):
         elif isinstance(beta, float):
             self.beta = beta
         else:
-            raise ValueError(f"Expected parameter ``beta`` to either be a float or torch tensor but received {beta}")
+            raise ValueError(
+                f"Expected parameter ``beta`` to either be a float or torch tensor but received {beta}"
+            )
 
     def __dist2__(self, x: torch.Tensor):
         x_norm = (x ** 2).sum(1).view(-1, 1)

@@ -22,7 +22,9 @@ def _fd_jacobian(function, x, h=1e-4):
     try:
         # Disable "training" in the function (relevant eg. for batch normalization)
         orig_state = function.disable_training()
-        Jnum = torch.cat([((function(x[b] + E) - function(x[b].unsqueeze(0))).t() / h).unsqueeze(0) for b in range(B)])
+        Jnum = torch.cat(
+            [((function(x[b] + E) - function(x[b].unsqueeze(0))).t() / h).unsqueeze(0) for b in range(B)]
+        )
     finally:
         function.enable_training(orig_state)  # re-enable training
 
@@ -67,7 +69,9 @@ def _jacobian_check(function, in_dim=None):
 
 _in_features = 10
 _models = [
-    nnj.Sequential(nnj.Linear(_in_features, 2), nnj.Softplus(beta=100, threshold=5), nnj.Linear(2, 4), nnj.Tanh()),
+    nnj.Sequential(
+        nnj.Linear(_in_features, 2), nnj.Softplus(beta=100, threshold=5), nnj.Linear(2, 4), nnj.Tanh()
+    ),
     nnj.Sequential(nnj.RBF(_in_features, 30), nnj.Linear(30, 2)),
     nnj.Sequential(nnj.Linear(_in_features, 4), nnj.Norm2()),
     nnj.Sequential(nnj.Linear(_in_features, 50), nnj.ReLU(), nnj.Linear(50, 100), nnj.Softplus()),

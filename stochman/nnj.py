@@ -529,7 +529,7 @@ class RBF(nn.Module):
         elif isinstance(beta, float):
             self.beta = beta
         else:
-            raise ValueError(f"Expected parameter ``beta`` to either be a float or" f"torch tensor but received {beta}")
+            raise ValueError(f"Expected parameter ``beta`` to either be a float or torch tensor but received {beta}")
 
     def __dist2__(self, x: torch.Tensor):
         x_norm = (x ** 2).sum(1).view(-1, 1)

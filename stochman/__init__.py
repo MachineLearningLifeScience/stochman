@@ -42,3 +42,4 @@ if __STOCHMAN_SETUP__:
 else:
     # import from package here
     from . import nnj
+    from . import curves

@@ -107,3 +107,17 @@ def test_jacobians(model):
     """
     J, Jnum = _jacobian_check(model, _in_features)
     numpy.testing.assert_allclose(J, Jnum, rtol=1, atol=1e-2)
+
+
+@pytest.mark.parametrize(
+    "func, func_input",
+    [
+        (nnj._jac_mul_generic, (torch.randn(5, 10, 10), torch.randn(5, 10, 10), 3)),
+        (nnj._jac_add_generic, (torch.randn(5, 10, 10), 1, torch.randn(5, 10, 10), 3)),
+    ],
+)
+def test_error_on_wrong_jactype(func, func_input):
+    with pytest.raises(
+        ValueError, match=r".* unknown jacobian type, should be either `JacType.Full` or `JacType.DIAG`"
+    ):
+        _ = func(*func_input)

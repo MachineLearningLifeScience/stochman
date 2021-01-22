@@ -21,17 +21,18 @@ class JacType(Enum):
 
 
 class ActivationJacobian(ABC):
-    """Abstract class for activation functions.
+    """Abstract base class for activation functions.
 
-    Any activation functions subclassing this class will need to implement
-    a method for computing their Jacobian."""
+    Any activation function subclassing this class will need to implement the
+    `_jacobian` method for computing their Jacobian.
+    """
 
     def __abstract_init__(self, activation, *args, **kwargs):
         activation.__init__(self, *args, **kwargs)
-        self.__activation__ = activation
+        self._activation = activation
 
     def forward(self, x: torch.Tensor, jacobian: bool = False):
-        val = self.__activation__.forward(self, x)
+        val = self._activation.forward(self, x)
 
         if jacobian:
             J, _ = self._jacobian(x, val)
@@ -73,11 +74,14 @@ class ActivationJacobian(ABC):
             # (B)x(in) * (B)x(in) -> (B)x(in)
             jac_type = JacType.DIAG
         else:
-            print("ActivationJacobian:_jac_mul: What the hell?")
+            raise ValueError(
+                "`ActivationJacobian:_jac_mul` method received an unknown "
+                "jacobian type, should be either `JacType.Full` or `JacType.DIAG`"
+            )
         return Jseq, jac_type
 
 
-def __jac_mul_generic__(J: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType) -> Tuple[torch.Tensor, JacType]:
+def _jac_mul_generic(J: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType) -> Tuple[torch.Tensor, JacType]:
     #
     # J: (B)x(K)x(in) -- the current Jacobian
 
@@ -94,11 +98,14 @@ def __jac_mul_generic__(J: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType) 
         Jseq = torch.einsum("bki,bi->bki", J, Jseq)  # J * diag(Jseq)
         # (B)x(K)(in) * (B)x(in) -> (B)x(K)x(in)
     else:
-        print("__jac_mul_generic__: What the hell?")
+        raise ValueError(
+            "`_jac_mul_generic` method received an unknown "
+            "jacobian type, should be either `JacType.Full` or `JacType.DIAG`"
+        )
     return Jseq, JacType.FULL
 
 
-def __jac_add_generic__(J1: torch.Tensor, J1Type: JacType, J2: torch.Tensor, J2Type: JacType):
+def _jac_add_generic(J1: torch.Tensor, J1Type: JacType, J2: torch.Tensor, J2Type: JacType):
     # Add two Jacobians of possibly different types
     if J1Type is J2Type:
         J = J1 + J2
@@ -110,7 +117,10 @@ def __jac_add_generic__(J1: torch.Tensor, J1Type: JacType, J2: torch.Tensor, J2T
         J = torch.diag_embed(J1) + J2
         JType = JacType.FULL
     else:
-        print("__jac_add_generic__: What the ....?")
+        raise ValueError(
+            "`_jac_add_generic` method received an unknown "
+            "jacobian type, should be either `JacType.Full` or `JacType.DIAG`"
+        )
 
     return J, JType
 
@@ -214,7 +224,7 @@ class Linear(nn.Linear):
 
     def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType):
         J, _ = self._jacobian(x, val)  # (batch)x(out)x(in)
-        Jseq, JseqType = __jac_mul_generic__(J, Jseq, JseqType)
+        Jseq, JseqType = _jac_mul_generic(J, Jseq, JseqType)
         return Jseq, JseqType
 
     def inverse(self):
@@ -249,7 +259,7 @@ class PosLinear(Linear):
 
     def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType):
         J, _ = self._jacobian(x, val)  # (batch)x(out)x(in)
-        Jseq, JseqType = __jac_mul_generic__(J, Jseq, JseqType)
+        Jseq, JseqType = _jac_mul_generic(J, Jseq, JseqType)
         return Jseq, JseqType
 
 
@@ -474,9 +484,9 @@ class ResidualBlock(nn.Module):
 
         if self.apply_proj:
             JL, JLType = self._projection._jac_mul(x, val, Jseq, JseqType)
-            J, JType = __jac_add_generic__(JL, JLType, JF, JFType)
+            J, JType = _jac_add_generic(JL, JLType, JF, JFType)
         else:
-            J, JType = __jac_add_generic__(Jseq, JseqType, JF, JFType)
+            J, JType = _jac_add_generic(Jseq, JseqType, JF, JFType)
 
         return J, JType
 
@@ -501,7 +511,7 @@ class Norm2(nn.Module):
 
     def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq, JseqType: JacType):
         J, _ = self._jacobian(x, val)  # (B)x(1)x(in) -- the current Jacobian
-        return __jac_mul_generic__(J, Jseq, JseqType)
+        return _jac_mul_generic(J, Jseq, JseqType)
 
 
 class RBF(nn.Module):
@@ -545,4 +555,4 @@ class RBF(nn.Module):
 
     def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq, JseqType: JacType):
         J, _ = self._jacobian(x, val)  # (B)x(1)x(in) -- the current Jacobian
-        return __jac_mul_generic__(J, Jseq, JseqType)
+        return _jac_mul_generic(J, Jseq, JseqType)

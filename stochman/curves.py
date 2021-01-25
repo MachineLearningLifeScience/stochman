@@ -22,6 +22,17 @@ class BasicCurve(ABC, nn.Module):
         self._num_nodes = num_nodes
         self._requires_grad = requires_grad
 
+        # register begin and end as buffers
+        if len(self._begin.shape) == 1 or self._begin.shape[0] == 1:
+            self.register_buffer("begin", self._begin.detach().view((1, -1)))  # 1xD
+        else:
+            self.register_buffer("begin", self._begin.detach())  # BxD
+
+        if len(self._end.shape) == 1 or self._end.shape[0] == 1:
+            self.register_buffer("end", self._end.detach().view((1, -1)))  # 1xD
+        else:
+            self.register_buffer("end", self._end.detach())  # BxD
+
         # overriden by child modules
         self._init_params(*args, **kwargs)
 
@@ -31,35 +42,48 @@ class BasicCurve(ABC, nn.Module):
 
     @property
     def device(self):
+        """ Returns the device of the curve. """
         return self.params.device
 
     def plot(self, t0: float = 0.0, t1: float = 1.0, N: int = 100, *plot_args, **plot_kwargs):
-        """Plot the curve
+        """Plot the curve.
+
         Args:
             t0: initial timepoint
             t1: final timepoint
             N: number of points used for plotting the curve
             plot_args: additional arguments passed directly to plt.plot
             plot_kwargs: additional keyword-arguments passed directly to plt.plot
+
+        Returns:
+            figs: figure handles
+
         """
         with torch.no_grad():
             import torchplot as plt
 
             t = torch.linspace(t0, t1, N, dtype=self.begin.dtype, device=self.device)
             points = self(t)  # NxD or BxNxD
+
             if len(points.shape) == 2:
                 points.unsqueeze_(0)  # 1xNxD
+
+            figs = []
             if points.shape[-1] == 1:
                 for b in range(points.shape[0]):
-                    plt.plot(t, points[b], *plot_args, **plot_kwargs)
-            elif points.shape[-1] == 2:
+                    fig = plt.plot(t, points[b], *plot_args, **plot_kwargs)
+                    figs.append(fig)
+                return figs
+            if points.shape[-1] == 2:
                 for b in range(points.shape[0]):
-                    plt.plot(points[b, :, 0], points[b, :, 1], "-", *plot_args, **plot_kwargs)
-            else:
-                raise ValueError(
-                    "BasicCurve.plot only supports plotting curves in"
-                    f" 1D or 2D, but recieved points with shape {points.shape}"
-                )
+                    fig = plt.plot(points[b, :, 0], points[b, :, 1], "-", *plot_args, **plot_kwargs)
+                    figs.append(fig)
+                return figs
+
+            raise ValueError(
+                "BasicCurve.plot only supports plotting curves in"
+                f" 1D or 2D, but recieved points with shape {points.shape}"
+            )
 
     def euclidean_length(self, t0: float = 0.0, t1: float = 1.0, N: int = 100) -> torch.Tensor:
         """Calculate the euclidian length of the curve
@@ -106,16 +130,16 @@ class BasicCurve(ABC, nn.Module):
         # using a second order method on a linear problem should imply
         # that we get to the optimum in few iterations (ideally 1).
         opt = torch.optim.LBFGS(self.parameters(), **optimizer_kwargs)
-        loss = torch.nn.MSELoss()
+        loss_func = torch.nn.MSELoss()
 
         def closure():
             opt.zero_grad()
-            L = loss(self(t), x)
+            L = loss_func(self(t), x)
             L.backward()
             return L
 
         for _ in range(num_steps):
-            opt.step(closure=closure)
+            loss = opt.step(closure=closure)
             if torch.max(torch.abs(self.params.grad)) < threshold:
                 break
         return loss
@@ -129,36 +153,37 @@ class DiscreteCurve(BasicCurve):
 
     def _init_params(self, *args, **kwargs) -> None:
         self.register_buffer(
-            "t", torch.linspace(0, 1, self._num_nodes, dtype=self._begin.dtype)[1:-1].view((-1, 1))
+            "t",
+            torch.linspace(0, 1, self._num_nodes, dtype=self._begin.dtype)[1:-1]
+            .reshape(-1, 1, 1)
+            .repeat(1, *self.begin.shape),
         )
-        self.register_buffer("begin", self._begin.view((1, -1)))
-        self.register_buffer("end", self._end.view((1, -1)))
-        params = self.t.mm(self.end) + (1 - self.t).mm(self.begin)
+        params = self.t * self.end.unsqueeze(0) + (1 - self.t) * self.begin.unsqueeze(0)
         if self._requires_grad:
             self.register_parameter("params", nn.Parameter(params))
         else:
             self.register_buffer("params", params)
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
-        start_nodes = torch.cat((self.begin, self.params))  # (num_edges)xD
-        end_nodes = torch.cat((self.params, self.end))  # (num_edges)xD
-        num_edges, D = start_nodes.shape
+        start_nodes = torch.cat((self.begin.unsqueeze(0), self.params))  # (num_edges)xBxD
+        end_nodes = torch.cat((self.params, self.end.unsqueeze(0)))  # (num_edges)xBxD
+        num_edges, B, D = start_nodes.shape
         t0 = torch.cat(
             (
-                torch.zeros(1, 1, dtype=self.t.dtype, device=self.device),
+                torch.zeros(1, B, D, dtype=self.t.dtype, device=self.device),
                 self.t,
-                torch.ones(1, 1, dtype=self.t.dtype, device=self.device),
+                torch.ones(1, B, D, dtype=self.t.dtype, device=self.device),
             )
         )
-        a = (end_nodes - start_nodes) / (t0[1:] - t0[:-1]).expand(-1, D)  # (num_edges)xD
-        b = start_nodes - a * t0[:-1].expand(-1, D)  # (num_edges)xD
+        a = (end_nodes - start_nodes) / (t0[1:] - t0[:-1])  # (num_edges)xBxD
+        b = start_nodes - a * t0[:-1]  # (num_edges)xBxD
 
         idx = (
             torch.floor(t.flatten() * num_edges).clamp(min=0, max=num_edges - 1).long()
         )  # use this if nodes are equi-distant
-        tt = t.view((-1, 1)).expand(-1, D)
-        result = a[idx] * tt + b[idx]  # NxD
-        return result
+        tt = t.view((-1, 1, 1)).expand(-1, B, D)
+        result = a[idx] * tt + b[idx]  # (num_edges)xBxD
+        return result.permute(1, 0, 2).squeeze(0)  # Bx(num_edges)xD
 
 
 class CubicSpline(BasicCurve):
@@ -174,16 +199,6 @@ class CubicSpline(BasicCurve):
         super().__init__(begin, end, num_nodes, requires_grad, basis=basis, params=params)
 
     def _init_params(self, basis, params) -> None:
-        if len(self._begin.shape) == 1 or self._begin.shape[0] == 1:
-            self.register_buffer("begin", self._begin.detach().view((1, -1)))  # 1xD
-        else:
-            self.register_buffer("begin", self._begin.detach())  # BxD
-
-        if len(self._end.shape) == 1 or self._end.shape[0] == 1:
-            self.register_buffer("end", self._end.detach().view((1, -1)))  # 1xD
-        else:
-            self.register_buffer("end", self._end.detach())  # BxD
-
         if basis is None:
             basis = self.compute_basis(num_edges=self._num_nodes - 1)
         self.register_buffer("basis", basis)

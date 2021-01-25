@@ -15,15 +15,15 @@ pip install stochman
 
 ## API overview
 
-Stoch includes a number of modules that each defines a set of functionalities for
-working with manifold data
+`StochMan` includes a number of modules that each defines a set of functionalities for
+working with manifold data.
 
-# `stochman.nnj`: `torch.nn` with jacobians
+### `stochman.nnj`: `torch.nn` with jacobians
 
-Many times it is requirement that working with the jacobian of the different operations.
-`stochman.nnj` provides plug-in replacements for the most used `torch.nn` layers such
-as `Linear`, `BatchNorm1d` ect. and commonly used activation functions such as `ReLU`,
-`Sigmoid` ect. Working with 
+Key to working with Riemannian geometry is the ability to compute jacobians. The jacobian matrix
+contains the first order partial derivatives. `stochman.nnj` provides plug-in replacements for the many 
+used `torch.nn` layers such as `Linear`, `BatchNorm1d` ect. and commonly used activation functions such as `ReLU`,
+`Sigmoid` ect. that enables fast computations of jacobians between the input to the layer and the output. 
 
 ``` python
 import torch
@@ -37,12 +37,15 @@ print(y.shape) # output from model: torch.size([100, 5])
 print(J.shape) # jacobian between input and output: torch.size([100, 5, 10])
 ```
 
-Implementing your own layers requires simply:
-* In addition to defining `forward`, the method called `_jacobian` should also be implemented.
-* If you implement an activation function it should also inheret from `nnj.ActivationJacobian`
+### `stochman.manifold`: Interface for working with Riemannian manifolds
 
 
-# stochman.manifold
+### `stochman.geodesic`: computing geodesics made easy!
+
+
+### `stochman.curves`: Simple curve objects
+
+
 
 
 

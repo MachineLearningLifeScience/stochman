@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import torch
 import numpy as np
+import torch
 
 from stochman.curves import BasicCurve
 
@@ -49,7 +49,7 @@ def geodesic_minimizing_energy(curve, manifold, optimizer=torch.optim.Adam, max_
     C = CubicSpline(begin=p0, end=p1, num_nodes=8, requires_grad=True)
     geodesic_minimizing_energy(C, S)
     """
-    ## Initialize optimizer and set up closure
+    # Initialize optimizer and set up closure
 
     alpha = torch.linspace(0, 1, eval_grid, dtype=curve.begin.dtype, device=curve.device)
     opt = optimizer([curve.parameters], lr=1e-1)
@@ -107,7 +107,7 @@ def geodesic_minimizing_energy_sgd(
     C = CubicSpline(begin=p0, end=p1, num_nodes=8, requires_grad=True)
     geodesic_minimizing_energy(C, S)
     """
-    ## Initialize optimizer and set up closure
+    # Initialize optimizer and set up closure
     opt = optimizer([curve.parameters], lr=1e-1)
 
     thresh = 5e-4  # 1e-4

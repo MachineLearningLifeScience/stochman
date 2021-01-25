@@ -229,29 +229,29 @@ class CubicSpline(BasicCurve):
             for i in range(num_edges - 1):
                 si = 4 * i  # start index
                 fill = torch.tensor([1.0, t[i], t[i] ** 2, t[i] ** 3], dtype=self.begin.dtype)
-                zeroth[i, si : (si + 4)] = fill
-                zeroth[i, (si + 4) : (si + 8)] = -fill
+                zeroth[i, si:(si + 4)] = fill
+                zeroth[i, (si + 4):(si + 8)] = -fill
 
             first = torch.zeros(num_edges - 1, 4 * num_edges, dtype=self.begin.dtype)
             for i in range(num_edges - 1):
                 si = 4 * i  # start index
                 fill = torch.tensor([0.0, 1.0, 2.0 * t[i], 3.0 * t[i] ** 2], dtype=self.begin.dtype)
-                first[i, si : (si + 4)] = fill
-                first[i, (si + 4) : (si + 8)] = -fill
+                first[i, si:(si + 4)] = fill
+                first[i, (si + 4):(si + 8)] = -fill
 
             second = torch.zeros(num_edges - 1, 4 * num_edges, dtype=self.begin.dtype)
             for i in range(num_edges - 1):
                 si = 4 * i  # start index
                 fill = torch.tensor([0.0, 0.0, 6.0 * t[i], 2.0], dtype=self.begin.dtype)
-                second[i, si : (si + 4)] = fill
-                second[i, (si + 4) : (si + 8)] = -fill
+                second[i, si:(si + 4)] = fill
+                second[i, (si + 4):(si + 8)] = -fill
 
             constraints = torch.cat((end_points, zeroth, first, second))
             self.constraints = constraints
 
-            ## Compute null space, which forms our basis
+            # Compute null space, which forms our basis
             _, S, V = torch.svd(constraints, some=False)
-            basis = V[:, S.numel() :]  # (num_coeffs)x(intr_dim)
+            basis = V[:, S.numel():]  # (num_coeffs)x(intr_dim)
 
             return basis
 

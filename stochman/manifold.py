@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-import torch
-from torch.autograd import grad
 from abc import ABC, abstractmethod
 from typing import Tuple, Union
-from stochman.utilities import squared_manifold_distance
+
+import torch
+from torch.autograd import grad
+
 from stochman.curves import BasicCurve, CubicSpline
-from stochman.geodesic import shooting_geodesic, geodesic_minimizing_energy
+from stochman.geodesic import geodesic_minimizing_energy, shooting_geodesic
+from stochman.utilities import squared_manifold_distance
 
 
 class Manifold(ABC):

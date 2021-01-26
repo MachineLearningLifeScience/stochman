@@ -192,21 +192,6 @@ class Sequential(nn.Sequential):
                 out_features = module.out_features
         return in_features, out_features
 
-    def disable_training(self):
-        state = []
-        for module in self._modules.values():
-            state.append(module.training)
-            module.training = False
-        return state
-
-    def enable_training(self, state=None):
-        if state is None:
-            for module in self._modules.values():
-                module.training = True
-        else:
-            for module, new_state in zip(self._modules.values(), state):
-                module.training = new_state
-
 
 class Linear(nn.Linear):
     def __init__(self, in_features: int, out_features: int, bias: bool = True):

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from abc import ABC, abstractmethod
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 
 import torch
 from torch.autograd import grad
@@ -286,24 +286,16 @@ class Manifold(ABC):
                 ddc = ddc.squeeze(-1)  # Nx(d)
         return ddc
 
-    def connecting_geodesic(self, p0, p1, init_curve=None) -> Tuple[BasicCurve, bool]:
+    def connecting_geodesic(self, p0, p1, init_curve: Optional[BasicCurve] = None) -> Tuple[BasicCurve, bool]:
         """
         Compute geodesic connecting two points.
 
-        Mandatory inputs:
-            p0:         a torch Tensor representing the initial point
-                        of the requested geodesic.
-            p1:         a torch Tensor representing the end point
-                        of the requested geodesic.
-
-        Optional input:
-            init_curve: a curve representing an initial guess of the
-                        requested geodesic. If the end-points of the
-                        initial curve do not correspond to p0 and p1,
-                        then the curve is modified accordingly.
-                        If None then the default constructor of the
-                        chosen curve family is applied.
-                        Default: None
+        Args:
+            p0: a torch Tensor representing the initial point of the requested geodesic.
+            p1: a torch Tensor representing the end point of the requested geodesic.
+            init_curve: a curve representing an initial guess of the requested geodesic. If the end-points of the
+                initial curve do not correspond to p0 and p1, then the curve is modified accordingly.
+                If None then the default constructor of the chosen curve family is applied.
         """
         if init_curve is None:
             curve = CubicSpline(p0, p1, device=p0.device)
@@ -343,7 +335,7 @@ class Manifold(ABC):
         """
         return shooting_geodesic(self, p, v, t, requires_grad)
 
-    def logmap(self, p0, p1, curve=None, optimize=True):
+    def logmap(self, p0, p1, curve: Optional[BasicCurve] = None, optimize=True):
         """
         Compute the logarithm map of the geodesic from p0 to p1.
 

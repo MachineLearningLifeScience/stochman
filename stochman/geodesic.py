@@ -8,13 +8,30 @@ from stochman.curves import BasicCurve
 class Geodesic(object):
     def __init__(self, manifold):
         self.manifold = manifold
-        pass
 
-    def fit(self, curve: BasicCurve, max_iter: int = 150, eval_grid: int = 20, dt: float = 0.005):
-        pass
+    def fit(self, curve: BasicCurve, max_iter: int = 150, eval_grid: int = 20, dt: float = 0.005, threshold: float = 1e-4,
+            verbose: bool = False):
+        alpha = torch.linspace(0, 1, eval_grid, dtype=curve.begin.dtype, device=curve.device)
+        
+        optimizer = self.configure_optim(curve)
+        
+        def closure():
+            optimizer.zero_grad()
+            loss = self.manifold.curve_energy(curve(alpha)).mean()
+            loss.backward()
+            return loss
+        
+        for k in range(max_iter):
+            optimizer.step(closure=closure)
+            if torch.max(torch.abs(curve.params.grad)) < threshold:
+                break
+        
+        max_grad = torch.max(torch.abs(curve.params.grad))
+        curve.constant_speed(self.manifold)
+        return max_grad < threshold
 
-    def configure_optim(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(lr=1e-2)
+    def configure_optim(self, curve) -> torch.optim.Optimizer:
+        return torch.optim.Adam(curve.parameters(), lr=1e-2)
 
 
 def geodesic_minimizing_energy(curve, manifold, optimizer=torch.optim.Adam, max_iter=150, eval_grid=20):

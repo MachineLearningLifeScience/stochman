@@ -95,11 +95,11 @@ class BasicCurve(ABC, nn.Module):
         Returns:
             lengths: a tensor with the length of each curve
         """
-        t = torch.linspace(t0, t1, N, device=self.device)
+        t = torch.linspace(t0, t1, N, device=self.device) # N
         points = self(t)  # NxD or BxNxD
         is_batched = points.dim() > 2
         if not is_batched:
-            points = points.unsqueeze(0)
+            points = points.unsqueeze(0) # 1xNxD
         delta = points[:, 1:] - points[:, :-1]  # Bx(N-1)xD
         energies = (delta ** 2).sum(dim=2)  # Bx(N-1)
         lengths = energies.sqrt().sum(dim=1)  # B
@@ -156,9 +156,9 @@ class DiscreteCurve(BasicCurve):
             "t",
             torch.linspace(0, 1, self._num_nodes, dtype=self._begin.dtype)[1:-1]
             .reshape(-1, 1, 1)
-            .repeat(1, *self.begin.shape),
+            .repeat(1, *self.begin.shape), # (_num_nodes-2)xBxD
         )
-        params = self.t * self.end.unsqueeze(0) + (1 - self.t) * self.begin.unsqueeze(0)
+        params = self.t * self.end.unsqueeze(0) + (1 - self.t) * self.begin.unsqueeze(0) # (_num_nodes)xBxD
         if self._requires_grad:
             self.register_parameter("params", nn.Parameter(params))
         else:

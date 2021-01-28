@@ -21,12 +21,12 @@ def _fd_jacobian(function, x, h=1e-4):
     E = h * torch.eye(D)
     try:
         # Disable "training" in the function (relevant eg. for batch normalization)
-        orig_state = function.disable_training()
+        orig_state = function.eval()
         Jnum = torch.cat(
             [((function(x[b] + E) - function(x[b].unsqueeze(0))).t() / h).unsqueeze(0) for b in range(B)]
         )
     finally:
-        function.enable_training(orig_state)  # re-enable training
+        function.train()
 
     if no_batch:
         Jnum = Jnum.squeeze(0)
@@ -54,10 +54,10 @@ def _jacobian_check(function, in_dim=None):
                 in_dim = 10
         x = torch.randn(batch_size, in_dim)
         try:
-            orig_state = function.disable_training()
+            function.eval()
             y, J, Jtype = function(x, jacobian=True, return_jac_type=True)
         finally:
-            function.enable_training(orig_state)
+            function.train()
 
         if Jtype is nnj.JacType.DIAG:
             J = J.diag_embed()

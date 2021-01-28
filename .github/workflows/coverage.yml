@@ -28,7 +28,7 @@ jobs:
         python setup.py install sdist bdist_wheel
         twine check dist/*
     - name: Install and run coverage
-      run |
+      run: |
         pip install coverage
         coverage run -m pytest
         coverage report -m

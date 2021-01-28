@@ -10,7 +10,7 @@ class Geodesic(object):
         self.manifold = manifold
 
     def fit(self, curve: BasicCurve, max_iter: int = 150, eval_grid: int = 20, dt: float = 0.005, threshold: float = 1e-4,
-            verbose: bool = False):
+            verbose: bool = False, subset: int = 5):
         alpha = torch.linspace(0, 1, eval_grid, dtype=curve.begin.dtype, device=curve.device)
         
         optimizer = self.configure_optim(curve)

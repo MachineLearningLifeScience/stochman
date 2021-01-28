@@ -200,7 +200,7 @@ class CubicSpline(BasicCurve):
 
     def _init_params(self, basis, params) -> None:
         if basis is None:
-            basis = self.compute_basis(num_edges=self._num_nodes - 1)
+            basis = self._compute_basis(num_edges=self._num_nodes - 1)
         self.register_buffer("basis", basis)
 
         if params is None:
@@ -216,7 +216,7 @@ class CubicSpline(BasicCurve):
             self.register_buffer("params", params)
 
     # Compute cubic spline basis with end-points (0, 0) and (1, 0)
-    def compute_basis(self, num_edges) -> torch.Tensor:
+    def _compute_basis(self, num_edges) -> torch.Tensor:
         with torch.no_grad():
             # set up constraints
             t = torch.linspace(0, 1, num_edges + 1, dtype=self.begin.dtype)[1:-1]
@@ -255,7 +255,7 @@ class CubicSpline(BasicCurve):
 
             return basis
 
-    def get_coeffs(self) -> torch.Tensor:
+    def _get_coeffs(self) -> torch.Tensor:
         coeffs = (
             self.basis.unsqueeze(0).expand(self.params.shape[0], -1, -1).bmm(self.params)
         )  # Bx(num_coeffs)xD
@@ -286,7 +286,7 @@ class CubicSpline(BasicCurve):
         return retval
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
-        coeffs = self.get_coeffs()  # Bx(num_edges)x4xD
+        coeffs = self._get_coeffs()  # Bx(num_edges)x4xD
         no_batch = t.ndim == 1
         if no_batch:
             t = t.expand(coeffs.shape[0], -1)  # Bx|t|
@@ -316,7 +316,7 @@ class CubicSpline(BasicCurve):
         """
         Return the derivative of the curve at a given time point.
         """
-        coeffs = self.get_coeffs()  # Bx(num_edges)x4xD
+        coeffs = self._get_coeffs()  # Bx(num_edges)x4xD
         B, num_edges, degree, D = coeffs.shape
         dcoeffs = coeffs[:, :, 1:, :] * torch.arange(
             1.0, degree, dtype=coeffs.dtype, device=self.device

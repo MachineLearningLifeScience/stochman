@@ -59,7 +59,36 @@ class TestCurves:
             ):
                 c.plot()
 
-    def test_fit_func(self, curve_class):
-        c = curve_class(torch.randn(1, 2), torch.randn(1, 2), 20)
-        loss = c.fit(torch.linspace(0, 1, 10), torch.randn(10, 2))
+    @pytest.mark.parametrize("batch_size", [1, 5])
+    def test_fit_func(self, curve_class, batch_size):
+        """ test fit function """
+        c = curve_class(torch.randn(batch_size, 2), torch.randn(batch_size, 2), 20)
+        loss = c.fit(torch.linspace(0, 1, 10), torch.randn(5, 10, 2))
         assert isinstance(loss, torch.Tensor)
+
+    def test_getindex_func(self, curve_class):
+        """ test __getidx__ function """
+        batched_c = curve_class(torch.randn(5, 2), torch.randn(5, 2))
+        for i in range(len(batched_c)):
+            c = batched_c[i]
+            assert isinstance(c, curve_class)
+            assert list(c.begin.shape) == [1, 2]
+            assert list(c.end.shape) == [1, 2]
+            assert c.device == batched_c.device
+
+    def test_setindex_func(self, curve_class):
+        """ test __setidx__ function """
+        batched_c = curve_class(torch.randn(5, 2), torch.randn(5, 2))
+        for i in range(len(batched_c)):
+            batched_c[i] = curve_class(torch.randn(1, 2), torch.randn(1, 2))
+            assert batched_c[i]
+
+    def test_to_other(self, curve_class):
+        """ test .tospline and .todiscrete """
+        c = curve_class(torch.randn(1, 2), torch.randn(1, 2), 20)
+        if curve_class == curves.DiscreteCurve:
+            new_c = c.tospline()
+            assert isinstance(new_c, curves.CubicSpline)
+        elif curve_class == curves.CubicSpline:
+            new_c = c.todiscrete()
+            assert isinstance(new_c, curves.DiscreteCurve)

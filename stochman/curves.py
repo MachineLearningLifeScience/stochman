@@ -17,21 +17,19 @@ class BasicCurve(ABC, nn.Module):
         **kwargs,
     ) -> None:
         super().__init__()
-        self._begin = begin
-        self._end = end
         self._num_nodes = num_nodes
         self._requires_grad = requires_grad
 
         # register begin and end as buffers
-        if len(self._begin.shape) == 1 or self._begin.shape[0] == 1:
-            self.register_buffer("begin", self._begin.detach().view((1, -1)))  # 1xD
+        if len(begin.shape) == 1 or begin.shape[0] == 1:
+            self.register_buffer("begin", begin.detach().view((1, -1)))  # 1xD
         else:
-            self.register_buffer("begin", self._begin.detach())  # BxD
+            self.register_buffer("begin", begin.detach())  # BxD
 
-        if len(self._end.shape) == 1 or self._end.shape[0] == 1:
-            self.register_buffer("end", self._end.detach().view((1, -1)))  # 1xD
+        if len(end.shape) == 1 or end.shape[0] == 1:
+            self.register_buffer("end", end.detach().view((1, -1)))  # 1xD
         else:
-            self.register_buffer("end", self._end.detach())  # BxD
+            self.register_buffer("end", end.detach())  # BxD
 
         # overriden by child modules
         self._init_params(*args, **kwargs)
@@ -44,6 +42,10 @@ class BasicCurve(ABC, nn.Module):
     def device(self):
         """ Returns the device of the curve. """
         return self.params.device
+
+    def __len__(self):
+        """ Returns the batch dimension e.g. the number of curves """
+        return self.begin.shape[0]
 
     def plot(self, t0: float = 0.0, t1: float = 1.0, N: int = 100, *plot_args, **plot_kwargs):
         """Plot the curve.
@@ -95,11 +97,11 @@ class BasicCurve(ABC, nn.Module):
         Returns:
             lengths: a tensor with the length of each curve
         """
-        t = torch.linspace(t0, t1, N, device=self.device) # N
+        t = torch.linspace(t0, t1, N, device=self.device)  # N
         points = self(t)  # NxD or BxNxD
         is_batched = points.dim() > 2
         if not is_batched:
-            points = points.unsqueeze(0) # 1xNxD
+            points = points.unsqueeze(0)  # 1xNxD
         delta = points[:, 1:] - points[:, :-1]  # Bx(N-1)xD
         energies = (delta ** 2).sum(dim=2)  # Bx(N-1)
         lengths = energies.sqrt().sum(dim=1)  # B
@@ -152,19 +154,21 @@ class DiscreteCurve(BasicCurve):
         end: torch.Tensor,
         num_nodes: int = 5,
         requires_grad: bool = True,
-        params: Optional[torch.Tensor] = None
+        params: Optional[torch.Tensor] = None,
     ) -> None:
         super().__init__(begin, end, num_nodes, requires_grad, params=params)
 
     def _init_params(self, params, *args, **kwargs) -> None:
         self.register_buffer(
             "t",
-            torch.linspace(0, 1, self._num_nodes, dtype=self._begin.dtype)[1:-1]
+            torch.linspace(0, 1, self._num_nodes, dtype=self.begin.dtype)[1:-1]
             .reshape(-1, 1, 1)
-            .repeat(1, *self.begin.shape), # (_num_nodes-2)xBxD
+            .repeat(1, *self.begin.shape),  # (_num_nodes-2)xBxD
         )
         if params is None:
-            params = self.t * self.end.unsqueeze(0) + (1 - self.t) * self.begin.unsqueeze(0) # (_num_nodes)xBxD
+            params = self.t * self.end.unsqueeze(0) + (1 - self.t) * self.begin.unsqueeze(
+                0
+            )  # (_num_nodes)xBxD
         if self._requires_grad:
             self.register_parameter("params", nn.Parameter(params))
         else:
@@ -206,6 +210,19 @@ class DiscreteCurve(BasicCurve):
 
     def __setitem__(self, indices, curves) -> None:
         self.params[:, indices] = curves.params.squeeze()
+
+    def tospline(self):
+        from stochman import CubicSpline
+
+        c = CubicSpline(
+            begin=self.begin,
+            end=self.end,
+            num_nodes=self._num_nodes,
+            requires_grad=self._requires_grad,
+        )
+        c.fit(self.t[:, 0, 0], self.params.squeeze(1))
+        return c
+
 
 class CubicSpline(BasicCurve):
     def __init__(
@@ -326,12 +343,12 @@ class CubicSpline(BasicCurve):
             num_nodes=self._num_nodes,
             requires_grad=self._requires_grad,
             basis=self.basis,
-            parameters=self.parameters[indices],
+            params=self.params[indices],
         ).to(self.device)
         return C
 
     def __setitem__(self, indices, curves) -> None:
-        self.parameters[indices] = curves.params
+        self.params[indices] = curves.params
 
     def deriv(self, t: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
@@ -399,3 +416,13 @@ class CubicSpline(BasicCurve):
             with torch.enable_grad():
                 _ = self.fit(new_t, Ct)
             return new_t, Ct
+
+    def todiscrete(self):
+        from stochman import DiscreteCurve
+
+        return DiscreteCurve(
+            begin=self.begin,
+            end=self.end,
+            num_nodes=self._num_nodes,
+            requires_grad=self._requires_grad,
+        )

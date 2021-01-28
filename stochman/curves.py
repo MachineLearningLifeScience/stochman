@@ -147,18 +147,24 @@ class BasicCurve(ABC, nn.Module):
 
 class DiscreteCurve(BasicCurve):
     def __init__(
-        self, begin: torch.Tensor, end: torch.Tensor, num_nodes: int = 5, requires_grad: bool = True
+        self,
+        begin: torch.Tensor,
+        end: torch.Tensor,
+        num_nodes: int = 5,
+        requires_grad: bool = True,
+        params: Optional[torch.Tensor] = None
     ) -> None:
-        super().__init__(begin, end, num_nodes, requires_grad)
+        super().__init__(begin, end, num_nodes, requires_grad, params=params)
 
-    def _init_params(self, *args, **kwargs) -> None:
+    def _init_params(self, params, *args, **kwargs) -> None:
         self.register_buffer(
             "t",
             torch.linspace(0, 1, self._num_nodes, dtype=self._begin.dtype)[1:-1]
             .reshape(-1, 1, 1)
             .repeat(1, *self.begin.shape), # (_num_nodes-2)xBxD
         )
-        params = self.t * self.end.unsqueeze(0) + (1 - self.t) * self.begin.unsqueeze(0) # (_num_nodes)xBxD
+        if params is None:
+            params = self.t * self.end.unsqueeze(0) + (1 - self.t) * self.begin.unsqueeze(0) # (_num_nodes)xBxD
         if self._requires_grad:
             self.register_parameter("params", nn.Parameter(params))
         else:
@@ -185,6 +191,21 @@ class DiscreteCurve(BasicCurve):
         result = a[idx] * tt + b[idx]  # (num_edges)xBxD
         return result.permute(1, 0, 2).squeeze(0)  # Bx(num_edges)xD
 
+    def __getitem__(self, indices: int) -> "DiscreteCurve":
+        params = self.params[:, indices]
+        if params.dim() == 2:
+            params = params.unsqueeze(1)
+        C = DiscreteCurve(
+            begin=self.begin[indices],
+            end=self.end[indices],
+            num_nodes=self._num_nodes,
+            requires_grad=self._requires_grad,
+            params=params,
+        ).to(self.device)
+        return C
+
+    def __setitem__(self, indices, curves) -> None:
+        self.params[:, indices] = curves.params.squeeze()
 
 class CubicSpline(BasicCurve):
     def __init__(

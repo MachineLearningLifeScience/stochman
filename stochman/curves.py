@@ -95,11 +95,11 @@ class BasicCurve(ABC, nn.Module):
         Returns:
             lengths: a tensor with the length of each curve
         """
-        t = torch.linspace(t0, t1, N, device=self.device)
+        t = torch.linspace(t0, t1, N, device=self.device) # N
         points = self(t)  # NxD or BxNxD
         is_batched = points.dim() > 2
         if not is_batched:
-            points = points.unsqueeze(0)
+            points = points.unsqueeze(0) # 1xNxD
         delta = points[:, 1:] - points[:, :-1]  # Bx(N-1)xD
         energies = (delta ** 2).sum(dim=2)  # Bx(N-1)
         lengths = energies.sqrt().sum(dim=1)  # B
@@ -147,18 +147,24 @@ class BasicCurve(ABC, nn.Module):
 
 class DiscreteCurve(BasicCurve):
     def __init__(
-        self, begin: torch.Tensor, end: torch.Tensor, num_nodes: int = 5, requires_grad: bool = True
+        self,
+        begin: torch.Tensor,
+        end: torch.Tensor,
+        num_nodes: int = 5,
+        requires_grad: bool = True,
+        params: Optional[torch.Tensor] = None
     ) -> None:
-        super().__init__(begin, end, num_nodes, requires_grad)
+        super().__init__(begin, end, num_nodes, requires_grad, params=params)
 
-    def _init_params(self, *args, **kwargs) -> None:
+    def _init_params(self, params, *args, **kwargs) -> None:
         self.register_buffer(
             "t",
             torch.linspace(0, 1, self._num_nodes, dtype=self._begin.dtype)[1:-1]
             .reshape(-1, 1, 1)
-            .repeat(1, *self.begin.shape),
+            .repeat(1, *self.begin.shape), # (_num_nodes-2)xBxD
         )
-        params = self.t * self.end.unsqueeze(0) + (1 - self.t) * self.begin.unsqueeze(0)
+        if params is None:
+            params = self.t * self.end.unsqueeze(0) + (1 - self.t) * self.begin.unsqueeze(0) # (_num_nodes)xBxD
         if self._requires_grad:
             self.register_parameter("params", nn.Parameter(params))
         else:
@@ -185,6 +191,21 @@ class DiscreteCurve(BasicCurve):
         result = a[idx] * tt + b[idx]  # (num_edges)xBxD
         return result.permute(1, 0, 2).squeeze(0)  # Bx(num_edges)xD
 
+    def __getitem__(self, indices: int) -> "DiscreteCurve":
+        params = self.params[:, indices]
+        if params.dim() == 2:
+            params = params.unsqueeze(1)
+        C = DiscreteCurve(
+            begin=self.begin[indices],
+            end=self.end[indices],
+            num_nodes=self._num_nodes,
+            requires_grad=self._requires_grad,
+            params=params,
+        ).to(self.device)
+        return C
+
+    def __setitem__(self, indices, curves) -> None:
+        self.params[:, indices] = curves.params.squeeze()
 
 class CubicSpline(BasicCurve):
     def __init__(
@@ -200,7 +221,7 @@ class CubicSpline(BasicCurve):
 
     def _init_params(self, basis, params) -> None:
         if basis is None:
-            basis = self.compute_basis(num_edges=self._num_nodes - 1)
+            basis = self._compute_basis(num_edges=self._num_nodes - 1)
         self.register_buffer("basis", basis)
 
         if params is None:
@@ -216,7 +237,7 @@ class CubicSpline(BasicCurve):
             self.register_buffer("params", params)
 
     # Compute cubic spline basis with end-points (0, 0) and (1, 0)
-    def compute_basis(self, num_edges) -> torch.Tensor:
+    def _compute_basis(self, num_edges) -> torch.Tensor:
         with torch.no_grad():
             # set up constraints
             t = torch.linspace(0, 1, num_edges + 1, dtype=self.begin.dtype)[1:-1]
@@ -255,7 +276,7 @@ class CubicSpline(BasicCurve):
 
             return basis
 
-    def get_coeffs(self) -> torch.Tensor:
+    def _get_coeffs(self) -> torch.Tensor:
         coeffs = (
             self.basis.unsqueeze(0).expand(self.params.shape[0], -1, -1).bmm(self.params)
         )  # Bx(num_coeffs)xD
@@ -286,7 +307,7 @@ class CubicSpline(BasicCurve):
         return retval
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
-        coeffs = self.get_coeffs()  # Bx(num_edges)x4xD
+        coeffs = self._get_coeffs()  # Bx(num_edges)x4xD
         no_batch = t.ndim == 1
         if no_batch:
             t = t.expand(coeffs.shape[0], -1)  # Bx|t|
@@ -316,7 +337,7 @@ class CubicSpline(BasicCurve):
         """
         Return the derivative of the curve at a given time point.
         """
-        coeffs = self.get_coeffs()  # Bx(num_edges)x4xD
+        coeffs = self._get_coeffs()  # Bx(num_edges)x4xD
         B, num_edges, degree, D = coeffs.shape
         dcoeffs = coeffs[:, :, 1:, :] * torch.arange(
             1.0, degree, dtype=coeffs.dtype, device=self.device

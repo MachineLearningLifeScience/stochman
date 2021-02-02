@@ -78,7 +78,7 @@ class BasicCurve(ABC, nn.Module):
                 return figs
             if points.shape[-1] == 2:
                 for b in range(points.shape[0]):
-                    fig = plt.plot(points[b, :, 0], points[b, :, 1], "-", *plot_args, **plot_kwargs)
+                    fig = plt.plot(points[b, :, 0], points[b, :, 1], *plot_args, **plot_kwargs)
                     figs.append(fig)
                 return figs
 

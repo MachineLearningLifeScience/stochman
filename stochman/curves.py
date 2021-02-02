@@ -417,12 +417,19 @@ class CubicSpline(BasicCurve):
                 _ = self.fit(new_t, Ct)
             return new_t, Ct
 
-    def todiscrete(self):
+    def todiscrete(self, num_nodes=None):
         from stochman import DiscreteCurve
+
+        if num_nodes is None:
+            num_nodes = self._num_nodes
+        t = torch.linspace(0, 1, num_nodes) # (num_nodes)
+        Ct = self(t) # Bx(num_nodes)xD
+        params = Ct[:, 1:-1, :] # Bx(num_nodes-2)xD
 
         return DiscreteCurve(
             begin=self.begin,
             end=self.end,
-            num_nodes=self._num_nodes,
+            num_nodes=num_nodes,
             requires_grad=self._requires_grad,
+            params=params.permute(1, 0, 2),
         )

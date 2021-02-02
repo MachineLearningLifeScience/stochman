@@ -393,7 +393,6 @@ class CubicSpline(BasicCurve):
                         Default: None.
 
         Note: It is not possible to back-propagate through this function.
-        Note: This function does currently not support batching.
         """
         with torch.no_grad():
             if t is None:

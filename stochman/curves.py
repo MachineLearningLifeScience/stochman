@@ -168,7 +168,7 @@ class DiscreteCurve(BasicCurve):
         )
         if params is None:
             params = self.t * self.end.unsqueeze(1) + \
-                     (1 - self.t) * self.begin.unsqueeze(1)  # Bx(_num_nodes)xD
+                (1 - self.t) * self.begin.unsqueeze(1)  # Bx(_num_nodes)xD
         if self._requires_grad:
             self.register_parameter("params", nn.Parameter(params))
         else:
@@ -185,7 +185,7 @@ class DiscreteCurve(BasicCurve):
                 torch.ones(B, 1, D, dtype=self.t.dtype, device=self.device),
             ),
             dim=1
-        ) # Bx(num_nodes)xD
+        )  # Bx(num_nodes)xD
         a = (end_nodes - start_nodes) / (t0[:, 1:] - t0[:, :-1])  # Bx(num_edges)xD
         b = start_nodes - a * t0[:, :-1]  # Bx(num_edges)xD
 
@@ -256,7 +256,7 @@ class DiscreteCurve(BasicCurve):
             new_t = torch.cat((zero, cs / cs[:, -1].unsqueeze(1)), dim=1)  # BxN
             S = CubicSpline(zero, one)
             _ = S.fit(new_t, t.unsqueeze(0).expand(B, -1).unsqueeze(2))
-            new_params = self(S(self.t[:, :, 0]).squeeze(-1)) # Bx(num_nodes-2)xD
+            new_params = self(S(self.t[:, :, 0]).squeeze(-1))  # Bx(num_nodes-2)xD
             self.params = nn.Parameter(new_params)
             return new_t, Ct
 
@@ -467,9 +467,9 @@ class CubicSpline(BasicCurve):
 
         if num_nodes is None:
             num_nodes = self._num_nodes
-        t = torch.linspace(0, 1, num_nodes)[1:-1] # (num_nodes-2)
-        Ct = self(t) # Bx(num_nodes-2)xD
-        
+        t = torch.linspace(0, 1, num_nodes)[1:-1]  # (num_nodes-2)
+        Ct = self(t)  # Bx(num_nodes-2)xD
+
         return DiscreteCurve(
             begin=self.begin,
             end=self.end,

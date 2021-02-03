@@ -162,43 +162,43 @@ class DiscreteCurve(BasicCurve):
         self.register_buffer(
             "t",
             torch.linspace(0, 1, self._num_nodes, dtype=self.begin.dtype)[1:-1]
-            .reshape(1, -1, 1)
-            .repeat(self.begin.shape[0], 1, self.begin.shape[1]),  # Bx(_num_nodes-2)xD
+            .view(1, -1, 1)
+            .expand(self.begin.shape[0], -1, self.begin.shape[1]),  # Bx(_num_nodes-2)xD
         )
         if params is None:
-            params = self.t * self.end.unsqueeze(1) + (1 - self.t) * self.begin.unsqueeze(
-                1
-            )  # Bx(_num_nodes)xD
+            params = self.t * self.end.unsqueeze(1) + \
+                     (1 - self.t) * self.begin.unsqueeze(1)  # Bx(_num_nodes)xD
         if self._requires_grad:
             self.register_parameter("params", nn.Parameter(params))
         else:
             self.register_buffer("params", params)
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
-        start_nodes = torch.cat((self.begin.unsqueeze(1), self.params))  # Bx(num_edges)xD
-        end_nodes = torch.cat((self.params, self.end.unsqueeze(1)))  # Bx(num_edges)xD
+        start_nodes = torch.cat((self.begin.unsqueeze(1), self.params), dim=1)  # Bx(num_edges)xD
+        end_nodes = torch.cat((self.params, self.end.unsqueeze(1)), dim=1)  # Bx(num_edges)xD
         B, num_edges, D = start_nodes.shape
         t0 = torch.cat(
             (
                 torch.zeros(B, 1, D, dtype=self.t.dtype, device=self.device),
                 self.t,
                 torch.ones(B, 1, D, dtype=self.t.dtype, device=self.device),
-            )
+            ),
+            dim=1
         ) # Bx(num_nodes)xD
-        a = (end_nodes - start_nodes) / (t0[1:] - t0[:-1])  # Bx(num_edges)xD
-        b = start_nodes - a * t0[:-1]  # Bx(num_edges)xD
+        a = (end_nodes - start_nodes) / (t0[:, 1:] - t0[:, :-1])  # Bx(num_edges)xD
+        b = start_nodes - a * t0[:, :-1]  # Bx(num_edges)xD
 
         if t.ndim == 1:
-            tt = t.view((1, -1, 1)).expand(B, -1) # Bx|t|
+            tt = t.view((1, -1)).expand(B, -1)  # Bx|t|
         elif t.ndim == 2:
-            tt = t # Bx|t|
+            tt = t  # Bx|t|
         else:
             raise Exception('t must have at most 2 dimensions')
         idx = (
-            torch.floor(t.flatten() * num_edges).clamp(min=0, max=num_edges - 1).long()
-        )  # this assumes that nodes are equi-distant
-        result = a[idx] * tt + b[idx]  # Bx(num_edges)xD
-        return result.permute(1, 0, 2).squeeze(0)  # Bx(num_edges)xD
+            torch.floor(tt * num_edges).clamp(min=0, max=num_edges - 1).long()  # Bx|t|
+        ).unsqueeze(2).repeat(1, 1, D)  # Bx|t|xD, this assumes that nodes are equi-distant
+        result = torch.gather(a, 1, idx) * tt.unsqueeze(2) + torch.gather(b, 1, idx)  # Bx|t|xD
+        return result
 
     def __getitem__(self, indices: int) -> "DiscreteCurve":
         params = self.params[indices]
@@ -268,7 +268,7 @@ class DiscreteCurve(BasicCurve):
             num_nodes=self._num_nodes,
             requires_grad=self._requires_grad,
         )
-        _ = c.fit(self.t[0, :, 0], self.params) # XXX: verify this
+        _ = c.fit(self.t[0, :, 0], self.params)
         return c
 
 
@@ -377,8 +377,6 @@ class CubicSpline(BasicCurve):
         if no_batch:
             t = t.expand(coeffs.shape[0], -1)  # Bx|t|
         retval = self._eval_polynomials(t, coeffs)  # Bx|t|xD
-        # tt = t.view((-1, 1)).unsqueeze(0).expand(retval.shape[0], -1, -1) # Bx|t|x1
-        # retval += (1-tt).bmm(self.begin.unsqueeze(1)) + tt.bmm(self.end.unsqueeze(1)) # Bx|t|xD
         retval += self._eval_straight_line(t)
         if no_batch and retval.shape[0] == 1:
             retval.squeeze_(0)  # |t|xD
@@ -469,14 +467,13 @@ class CubicSpline(BasicCurve):
 
         if num_nodes is None:
             num_nodes = self._num_nodes
-        t = torch.linspace(0, 1, num_nodes) # (num_nodes)
-        Ct = self(t) # Bx(num_nodes)xD
-        params = Ct[:, 1:-1, :] # Bx(num_nodes-2)xD
-
+        t = torch.linspace(0, 1, num_nodes)[1:-1] # (num_nodes-2)
+        Ct = self(t) # Bx(num_nodes-2)xD
+        
         return DiscreteCurve(
             begin=self.begin,
             end=self.end,
             num_nodes=num_nodes,
             requires_grad=self._requires_grad,
-            params=params.permute(1, 0, 2),
+            params=Ct,
         )

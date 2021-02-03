@@ -6,6 +6,7 @@ from typing import Optional, Tuple, Union
 import torch
 import torch.nn.functional as F
 from torch import nn
+import numpy as np
 
 
 class JacType(Enum):
@@ -45,7 +46,7 @@ class Jacobian(torch.Tensor):
     def __repr__(self):
         tensor_repr = super().__repr__()
         tensor_repr = tensor_repr.replace('tensor', 'jacobian')
-        tensor_repr += f'\n jactype={self.jactype}'
+        tensor_repr += f'\n jactype={self.jactype.value if isinstance(self.jactype, Enum) else self.jactype}'
         return tensor_repr
     
     def __add__(self, other):
@@ -543,3 +544,41 @@ class RBF(nn.Module):
     def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
         jac = self._jacobian(x, val)  # (B)x(1)x(in) -- the current Jacobian
         return jac @ jac_in
+
+
+class _BaseJacConv:
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
+        if jacobian:
+            jac = self._jacobian(x, val)
+            val = (val, jac)
+        return val
+
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
+        w = self._conv_to_toeplitz(x.shape[1:])
+        w = w.unsqueeze(0).repeat(x.shape[0], 1, 1)
+        return jacobian(w, JacType.CONV)        
+
+    
+class Conv1d(_BaseJacConv, nn.Conv1d):
+    def _conv_to_toeplitz(self, input_shape):
+        identity = torch.eye(np.prod(input_shape).item()).reshape([-1] + list(input_shape))
+        output = F.conv1d(identity, self.weight, None, self.stride, self.padding)
+        W = output.reshape(output.shape[0], -1).T
+        return W
+
+
+class Conv2d(_BaseJacConv, nn.Conv2d):
+    def _conv_to_toeplitz(self, input_shape):
+        identity = torch.eye(np.prod(input_shape).item()).reshape([-1] + list(input_shape))
+        output = F.conv2d(identity, self.weight, None, self.stride, self.padding)
+        W = output.reshape(output.shape[0], -1).T
+        return W
+
+
+class Conv2D(_BaseJacConv, nn.Conv3d):
+    def _conv_to_toeplitz(self, input_shape):
+        identity = torch.eye(np.prod(input_shape).item()).reshape([-1] + list(input_shape))
+        output = F.conv3d(identity, self.weight, None, self.stride, self.padding)
+        W = output.reshape(output.shape[0], -1).T
+        return W

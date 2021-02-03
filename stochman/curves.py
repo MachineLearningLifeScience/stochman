@@ -219,47 +219,46 @@ class DiscreteCurve(BasicCurve):
     def __setitem__(self, indices, curves) -> None:
         self.params[indices] = curves.params.squeeze()
 
-    # def constant_speed(
-    #     self, metric=None, t: Optional[torch.Tensor] = None
-    # ) -> Tuple[torch.Tensor, torch.Tensor]:
-    #     """
-    #     Reparametrize the curve to have constant speed.
+    def constant_speed(
+        self, metric=None, t: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Reparametrize the curve to have constant speed.
 
-    #     Optional input:
-    #         metric:     the Manifold under which the curve should have constant speed.
-    #                     If None then the Euclidean metric is applied.
-    #                     Default: None.
+        Optional input:
+            metric:     the Manifold under which the curve should have constant speed.
+                        If None then the Euclidean metric is applied.
+                        Default: None.
 
-    #     Note: It is not possible to back-propagate through this function.
-    #     """
-    #     from stochman import CubicSpline
+        Note: It is not possible to back-propagate through this function.
+        """
+        from stochman import CubicSpline
 
-    #     with torch.no_grad():
-    #         if t is None:
-    #             t = torch.linspace(0, 1, 100)  # N
-    #         Ct = self(t)  # NxD or BxNxD
-    #         if Ct.dim() == 2:
-    #             Ct.unsqueeze_(0)  # BxNxD
-    #         B, N, D = Ct.shape
-    #         delta = Ct[:, 1:] - Ct[:, :-1]  # Bx(N-1)xD
-    #         if metric is None:
-    #             local_len = delta.norm(dim=2)  # Bx(N-1)
-    #         else:
-    #             local_len = (
-    #                 metric.inner(Ct[:, :-1].reshape(-1, D), delta.view(-1, D), delta.view(-1, D))
-    #                 .view(B, N - 1)
-    #                 .sqrt()
-    #             )  # Bx(N-1)
-    #         cs = local_len.cumsum(dim=1)  # Bx(N-1)
-    #         zero = torch.zeros(B, 1) # Bx1 -- XXX: missing dtype and device
-    #         one = torch.ones(B, 1) # Bx1 -- XXX: ditto
-    #         new_t = torch.cat((zero, cs / cs[:, -1].unsqueeze(1)), dim=1)  # BxN
-    #         S = CubicSpline(zero, one)
-    #         _ = S.fit(new_t, t.unsqueeze(0).expand(B, -1).unsqueeze(2))
-    #         new_params = self(S(self.t[:, 0, 0]).squeeze(-1)) # B
-
-    #         from IPython import embed; embed()
-    #         return new_t, Ct
+        with torch.no_grad():
+            if t is None:
+                t = torch.linspace(0, 1, 100)  # N
+            Ct = self(t)  # NxD or BxNxD
+            if Ct.ndim == 2:
+                Ct.unsqueeze_(0)  # BxNxD
+            B, N, D = Ct.shape
+            delta = Ct[:, 1:] - Ct[:, :-1]  # Bx(N-1)xD
+            if metric is None:
+                local_len = delta.norm(dim=2)  # Bx(N-1)
+            else:
+                local_len = (
+                    metric.inner(Ct[:, :-1].reshape(-1, D), delta.view(-1, D), delta.view(-1, D))
+                    .view(B, N - 1)
+                    .sqrt()
+                )  # Bx(N-1)
+            cs = local_len.cumsum(dim=1)  # Bx(N-1)
+            zero = torch.zeros(B, 1, dtype=cs.dtype, device=cs.device)  # Bx1
+            one = torch.ones(B, 1, dtype=cs.dtype, device=cs.device)  # Bx1
+            new_t = torch.cat((zero, cs / cs[:, -1].unsqueeze(1)), dim=1)  # BxN
+            S = CubicSpline(zero, one)
+            _ = S.fit(new_t, t.unsqueeze(0).expand(B, -1).unsqueeze(2))
+            new_params = self(S(self.t[:, :, 0]).squeeze(-1)) # Bx(num_nodes-2)xD
+            self.params = nn.Parameter(new_params)
+            return new_t, Ct
 
     def tospline(self):
         from stochman import CubicSpline

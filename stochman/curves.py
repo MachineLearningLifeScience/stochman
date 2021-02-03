@@ -162,43 +162,48 @@ class DiscreteCurve(BasicCurve):
         self.register_buffer(
             "t",
             torch.linspace(0, 1, self._num_nodes, dtype=self.begin.dtype)[1:-1]
-            .reshape(-1, 1, 1)
-            .repeat(1, *self.begin.shape),  # (_num_nodes-2)xBxD
+            .reshape(1, -1, 1)
+            .repeat(self.begin.shape[0], 1, self.begin.shape[1]),  # Bx(_num_nodes-2)xD
         )
         if params is None:
-            params = self.t * self.end.unsqueeze(0) + (1 - self.t) * self.begin.unsqueeze(
-                0
-            )  # (_num_nodes)xBxD
+            params = self.t * self.end.unsqueeze(1) + (1 - self.t) * self.begin.unsqueeze(
+                1
+            )  # Bx(_num_nodes)xD
         if self._requires_grad:
             self.register_parameter("params", nn.Parameter(params))
         else:
             self.register_buffer("params", params)
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
-        start_nodes = torch.cat((self.begin.unsqueeze(0), self.params))  # (num_edges)xBxD
-        end_nodes = torch.cat((self.params, self.end.unsqueeze(0)))  # (num_edges)xBxD
-        num_edges, B, D = start_nodes.shape
+        start_nodes = torch.cat((self.begin.unsqueeze(1), self.params))  # Bx(num_edges)xD
+        end_nodes = torch.cat((self.params, self.end.unsqueeze(1)))  # Bx(num_edges)xD
+        B, num_edges, D = start_nodes.shape
         t0 = torch.cat(
             (
-                torch.zeros(1, B, D, dtype=self.t.dtype, device=self.device),
+                torch.zeros(B, 1, D, dtype=self.t.dtype, device=self.device),
                 self.t,
-                torch.ones(1, B, D, dtype=self.t.dtype, device=self.device),
+                torch.ones(B, 1, D, dtype=self.t.dtype, device=self.device),
             )
-        )
-        a = (end_nodes - start_nodes) / (t0[1:] - t0[:-1])  # (num_edges)xBxD
-        b = start_nodes - a * t0[:-1]  # (num_edges)xBxD
+        ) # Bx(num_nodes)xD
+        a = (end_nodes - start_nodes) / (t0[1:] - t0[:-1])  # Bx(num_edges)xD
+        b = start_nodes - a * t0[:-1]  # Bx(num_edges)xD
 
+        if t.ndim == 1:
+            tt = t.view((1, -1, 1)).expand(B, -1) # Bx|t|
+        elif t.ndim == 2:
+            tt = t # Bx|t|
+        else:
+            raise Exception('t must have at most 2 dimensions')
         idx = (
             torch.floor(t.flatten() * num_edges).clamp(min=0, max=num_edges - 1).long()
-        )  # use this if nodes are equi-distant
-        tt = t.view((-1, 1, 1)).expand(-1, B, D)
-        result = a[idx] * tt + b[idx]  # (num_edges)xBxD
+        )  # this assumes that nodes are equi-distant
+        result = a[idx] * tt + b[idx]  # Bx(num_edges)xD
         return result.permute(1, 0, 2).squeeze(0)  # Bx(num_edges)xD
 
     def __getitem__(self, indices: int) -> "DiscreteCurve":
-        params = self.params[:, indices]
+        params = self.params[indices]
         if params.dim() == 2:
-            params = params.unsqueeze(1)
+            params = params.unsqueeze(0)
         C = DiscreteCurve(
             begin=self.begin[indices],
             end=self.end[indices],
@@ -209,7 +214,50 @@ class DiscreteCurve(BasicCurve):
         return C
 
     def __setitem__(self, indices, curves) -> None:
-        self.params[:, indices] = curves.params.squeeze()
+        self.params[indices] = curves.params.squeeze()
+
+    # def constant_speed(
+    #     self, metric=None, t: Optional[torch.Tensor] = None
+    # ) -> Tuple[torch.Tensor, torch.Tensor]:
+    #     """
+    #     Reparametrize the curve to have constant speed.
+
+    #     Optional input:
+    #         metric:     the Manifold under which the curve should have constant speed.
+    #                     If None then the Euclidean metric is applied.
+    #                     Default: None.
+
+    #     Note: It is not possible to back-propagate through this function.
+    #     """
+    #     from stochman import CubicSpline
+
+    #     with torch.no_grad():
+    #         if t is None:
+    #             t = torch.linspace(0, 1, 100)  # N
+    #         Ct = self(t)  # NxD or BxNxD
+    #         if Ct.dim() == 2:
+    #             Ct.unsqueeze_(0)  # BxNxD
+    #         B, N, D = Ct.shape
+    #         delta = Ct[:, 1:] - Ct[:, :-1]  # Bx(N-1)xD
+    #         if metric is None:
+    #             local_len = delta.norm(dim=2)  # Bx(N-1)
+    #         else:
+    #             local_len = (
+    #                 metric.inner(Ct[:, :-1].reshape(-1, D), delta.view(-1, D), delta.view(-1, D))
+    #                 .view(B, N - 1)
+    #                 .sqrt()
+    #             )  # Bx(N-1)
+    #         cs = local_len.cumsum(dim=1)  # Bx(N-1)
+    #         zero = torch.zeros(B, 1) # Bx1 -- XXX: missing dtype and device
+    #         one = torch.ones(B, 1) # Bx1 -- XXX: ditto
+    #         new_t = torch.cat((zero, cs / cs[:, -1].unsqueeze(1)), dim=1)  # BxN
+    #         S = CubicSpline(zero, one)
+    #         with torch.enable_grad():
+    #             _ = S.fit(new_t, t.unsqueeze(0).expand(B, -1).unsqueeze(2))
+    #         new_params = self(S(self.t[:, 0, 0]).squeeze(-1)) # B
+
+    #         from IPython import embed; embed()
+    #         return new_t, Ct
 
     def tospline(self):
         from stochman import CubicSpline
@@ -220,7 +268,7 @@ class DiscreteCurve(BasicCurve):
             num_nodes=self._num_nodes,
             requires_grad=self._requires_grad,
         )
-        c.fit(self.t[:, 0, 0], self.params.squeeze(1))
+        _ = c.fit(self.t[0, :, 0], self.params) # XXX: verify this
         return c
 
 

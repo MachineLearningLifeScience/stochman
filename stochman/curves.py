@@ -140,10 +140,11 @@ class BasicCurve(ABC, nn.Module):
             L.backward()
             return L
 
-        for _ in range(num_steps):
-            loss = opt.step(closure=closure)
-            if torch.max(torch.abs(self.params.grad)) < threshold:
-                break
+        with torch.enable_grad():
+            for _ in range(num_steps):
+                loss = opt.step(closure=closure)
+                if torch.max(torch.abs(self.params.grad)) < threshold:
+                    break
         return loss
 
 
@@ -252,8 +253,7 @@ class DiscreteCurve(BasicCurve):
     #         one = torch.ones(B, 1) # Bx1 -- XXX: ditto
     #         new_t = torch.cat((zero, cs / cs[:, -1].unsqueeze(1)), dim=1)  # BxN
     #         S = CubicSpline(zero, one)
-    #         with torch.enable_grad():
-    #             _ = S.fit(new_t, t.unsqueeze(0).expand(B, -1).unsqueeze(2))
+    #         _ = S.fit(new_t, t.unsqueeze(0).expand(B, -1).unsqueeze(2))
     #         new_params = self(S(self.t[:, 0, 0]).squeeze(-1)) # B
 
     #         from IPython import embed; embed()
@@ -458,8 +458,7 @@ class CubicSpline(BasicCurve):
                 )  # Bx(N-1)
             cs = local_len.cumsum(dim=1)  # Bx(N-1)
             new_t = torch.cat((torch.zeros(B, 1), cs / cs[:, -1].unsqueeze(1)), dim=1)  # BxN
-            with torch.enable_grad():
-                _ = self.fit(new_t, Ct)
+            _ = self.fit(new_t, Ct)
             return new_t, Ct
 
     def todiscrete(self, num_nodes=None):

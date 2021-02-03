@@ -20,8 +20,8 @@ def _fd_jacobian(function, x, h=1e-4):
     # Compute finite differences
     E = h * torch.eye(D)
     try:
+        function.eval()
         # Disable "training" in the function (relevant eg. for batch normalization)
-        orig_state = function.eval()
         Jnum = torch.cat(
             [((function(x[b] + E) - function(x[b].unsqueeze(0))).t() / h).unsqueeze(0) for b in range(B)]
         )
@@ -55,11 +55,11 @@ def _jacobian_check(function, in_dim=None):
         x = torch.randn(batch_size, in_dim)
         try:
             function.eval()
-            y, J, Jtype = function(x, jacobian=True, return_jac_type=True)
+            y, J = function(x, jacobian=True)
         finally:
             function.train()
 
-        if Jtype is nnj.JacType.DIAG:
+        if J.jactype == nnj.JacType.DIAG:
             J = J.diag_embed()
 
         Jnum = _fd_jacobian(function, x)
@@ -124,36 +124,21 @@ def test_jac_return(model, return_jac):
     else:
         assert isinstance(output, torch.Tensor)
 
-
-@pytest.mark.parametrize(
-    "func, func_input",
-    [
-        (nnj._jac_mul_generic, (torch.randn(5, 10, 10), torch.randn(5, 10, 10), 3)),
-        (nnj._jac_add_generic, (torch.randn(5, 10, 10), 1, torch.randn(5, 10, 10), 3)),
-    ],
-)
-def test_error_on_wrong_jactype(func, func_input):
-    with pytest.raises(
-        ValueError, match=r".* unknown jacobian type, should be either `JacType.Full` or `JacType.DIAG`"
-    ):
-        _ = func(*func_input)
+_testcases = [
+    (nnj.jacobian(torch.ones(5, 10, 10), 'full'), nnj.jacobian(torch.ones(5, 10, 10), 'full')),
+    (nnj.jacobian(torch.ones(5, 10, 10), 'full'), nnj.jacobian(torch.ones(5, 10), 'diag')),
+    (nnj.jacobian(torch.ones(5, 10), 'diag'), nnj.jacobian(torch.ones(5, 10, 10), 'full')),
+    (nnj.jacobian(torch.ones(5, 10), 'diag'), nnj.jacobian(torch.ones(5, 10), 'diag')),
+]
 
 
-@pytest.mark.parametrize(
-    "cases",
-    [
-        (torch.ones(5, 10, 10), nnj.JacType.FULL, torch.ones(5, 10, 10), nnj.JacType.FULL),
-        (torch.ones(5, 10, 10), nnj.JacType.FULL, torch.ones(5, 10), nnj.JacType.DIAG),
-        (torch.ones(5, 10), nnj.JacType.DIAG, torch.ones(5, 10, 10), nnj.JacType.FULL),
-        (torch.ones(5, 10), nnj.JacType.DIAG, torch.ones(5, 10), nnj.JacType.DIAG),
-    ],
-)
-def test_generic_add(cases):
+@pytest.mark.parametrize("cases", _testcases)
+def test_add(cases):
     """ test generic add for different combinations of jacobians"""
-    j_out, j_type = nnj._jac_add_generic(*cases)
-    assert isinstance(j_out, torch.Tensor)
+    j_out = cases[0] + cases[1]
+    assert isinstance(j_out, nnj.Jacobian)
 
-    if cases[1] == cases[3]:
+    if cases[0].jactype == cases[1].jactype:
         # if same type, all elements should be 2
         j_out = j_out.flatten()
         assert all(j_out == 2 * torch.ones_like(j_out))
@@ -161,3 +146,8 @@ def test_generic_add(cases):
         # if not same type, only diag should be 2
         j_out_diag = torch.stack([jo.diag() for jo in j_out]).flatten()
         assert all(j_out_diag == 2 * torch.ones_like(j_out_diag))
+
+@pytest.mark.parametrize("cases", _testcases)
+def test_matmul(cases):
+    j_out = cases[0] @ cases[1]
+    assert isinstance(j_out, nnj.Jacobian)

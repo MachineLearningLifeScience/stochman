@@ -16,8 +16,86 @@ class JacType(Enum):
         FULL:   The Jacobian is a matrix of whatever size.
     """
 
-    DIAG = 1
-    FULL = 2
+    DIAG = 'diag'
+    FULL = 'full'
+    CONV = 'conv'
+    
+    def __eq__(self, other: Union[str, Enum]) -> bool:
+        other = other.value if isinstance(other, Enum) else str(other)
+        return self.value.lower() == other.lower()
+    
+
+class Jacobian(torch.Tensor):
+    """ Class representing a jacobian tensor, subclasses from torch.Tensor 
+        Requires the additional `jactype` parameter to initialize, which
+        is a string indicating the jacobian type
+    """
+    def __init__(self, tensor, jactype):
+        available_jactype = [item.value for item in JacType]
+        if jactype not in available_jactype:
+            raise ValueError(f'Tried to initialize jacobian tensor with unknown jacobian type {jactype}.'
+                             f' Please choose between {available_jactype}')
+        self.jactype = jactype
+    
+    @staticmethod
+    def __new__(cls, x, jactype, *args, **kwargs):
+        cls.jactype = jactype
+        return super().__new__(cls, x, *args, **kwargs)
+    
+    def __repr__(self):
+        tensor_repr = super().__repr__()
+        tensor_repr = tensor_repr.replace('tensor', 'jacobian')
+        tensor_repr += f'\n jactype={self.jactype}'
+        return tensor_repr
+    
+    def __add__(self, other):
+        if isinstance(other, Jacobian):            
+            if self.jactype == other.jactype:
+                res = torch.add(self, other)
+                return jacobian(res, self.jactype)
+            if self.jactype == JacType.FULL and other.jactype == JacType.DIAG:
+                res = torch.add(self, torch.diag_embed(other))
+                return jacobian(res, JacType.FULL)
+            if self.jactype == JacType.DIAG and other.jactype == JacType.FULL:
+                res = torch.add(torch.diag_embed(self), other)
+                return jacobian(res, JacType.FULL)                
+            if self.jactype == JacType.CONV and other.jactype == JacType.CONV:
+                res = torch.add(self, other)
+                return jacobian(res, JacType.CONV)
+            raise ValueError('Unknown addition of jacobian matrices')
+        
+        return super().__add__(other)
+        
+    def __matmul__(self, other):
+        if isinstance(other, Jacobian):
+            # diag * diag
+            if self.jactype == JacType.DIAG and other.jactype == JacType.DIAG:
+                res = self * other
+                return jacobian(res, JacType.DIAG)
+            # full * full
+            if self.jactype == JacType.FULL and other.jactype == JacType.FULL:
+                res = torch.matmul(self, other)
+                return jacobian(res, JacType.FULL)
+            # diag * full
+            if self.jactype == JacType.DIAG and other.jactype == JacType.FULL:
+                res = torch.matmul(torch.diag_embed(self), other)
+                return jacobian(res, JacType.FULL)
+            # full * diag
+            if self.jactype == JacType.FULL and other.jactype == JacType.DIAG:
+                res = torch.matmul(self, torch.diag_embed(other))
+                return jacobian(res, JacType.FULL)
+            if self.jactype == JacType.CONV:
+                # conv * conv
+                if other == JacType.CONV:
+                    res = self * other
+                    return jacobian(res, JacType.CONV)
+           
+        raise ValueError('Unknown matrix multiplication of jacobian matrices')
+    
+
+def jacobian(tensor, jactype):
+    """ Initialize a jacobian tensor by a specified jacobian type """
+    return Jacobian(tensor, jactype)
 
 
 class ActivationJacobian(ABC):
@@ -41,95 +119,27 @@ class ActivationJacobian(ABC):
             return val
 
     @abstractmethod
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
         """Evaluate the Jacobian of an activation function.
         The Jacobian is evaluated at x, where the function
         attains value val."""
         pass
 
     def _jac_mul(
-        self, x: torch.Tensor, val: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType
-    ) -> Tuple[torch.Tensor, JacType]:
+        self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
         """Multiply the Jacobian at x with M.
         This can potentially be done more efficiently than
         first computing the Jacobian, and then performing the
         multiplication."""
-
-        J, _ = self._jacobian(x, val)  # (B)x(in) -- the current Jacobian;
-        # should be interpreted as a diagonal matrix (B)x(in)x(in)
-
-        # We either want to (matrix) multiply the current diagonal Jacobian with a
-        #  *) vector: size (B)x(in)
-        #       This should be interpreted as a diagonal matrix of size
-        #       (B)x(in)x(in), and we want to perform the product diag(J) * diag(Jseq)
-        #  *) matrix: size (B)x(in)x(M)
-        #       In this case we want to return diag(J) * Jseq
-
-        if JseqType is JacType.FULL:  # Jseq.dim() is 3: # Jseq is matrix
-            Jseq = torch.einsum("bi,bim->bim", J, Jseq)  # diag(J) * Jseq
-            # (B)x(in) * (B)x(in)x(M)-> (B)x(in)x(M)
-            jac_type = JacType.FULL
-        elif JseqType is JacType.DIAG:  # Jseq.dim() is 2: # Jseq is vector (representing a diagonal matrix)
-            Jseq = J * Jseq  # diag(J) * diag(Jseq)
-            # (B)x(in) * (B)x(in) -> (B)x(in)
-            jac_type = JacType.DIAG
-        else:
-            raise ValueError(
-                "`ActivationJacobian:_jac_mul` method received an unknown "
-                "jacobian type, should be either `JacType.Full` or `JacType.DIAG`"
-            )
-        return Jseq, jac_type
-
-
-def _jac_mul_generic(J: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType) -> Tuple[torch.Tensor, JacType]:
-    #
-    # J: (B)x(K)x(in) -- the current Jacobian
-
-    # We either want to (matrix) multiply the current Jacobian with a
-    #  *) vector: size (B)x(in)
-    #       This should be interpreted as a diagonal matrix of size
-    #       (B)x(in)x(in), and we want to perform the product diag(J) * diag(Jseq)
-    #  *) matrix: size (B)x(in)x(M)
-    #       In this case we want to return diag(J) * Jseq
-    if JseqType is JacType.FULL:  # Jseq.dim() is 3: # Jseq is matrix
-        Jseq = torch.einsum("bki,bim->bkm", J, Jseq)  # J * Jseq
-        # (B)x(K)(in) * (B)x(in)x(M)-> (B)x(K)x(M)
-    elif JseqType is JacType.DIAG:  # Jseq.dim() is 2: # Jseq is vector (representing a diagonal matrix)
-        Jseq = torch.einsum("bki,bi->bki", J, Jseq)  # J * diag(Jseq)
-        # (B)x(K)(in) * (B)x(in) -> (B)x(K)x(in)
-    else:
-        raise ValueError(
-            "`_jac_mul_generic` method received an unknown "
-            "jacobian type, should be either `JacType.Full` or `JacType.DIAG`"
-        )
-    return Jseq, JacType.FULL
-
-
-def _jac_add_generic(J1: torch.Tensor, J1Type: JacType, J2: torch.Tensor, J2Type: JacType):
-    # Add two Jacobians of possibly different types
-    if J1Type is J2Type:
-        J = J1 + J2
-        JType = J1Type
-    elif J1Type is JacType.FULL and J2Type is JacType.DIAG:
-        J = J1 + torch.diag_embed(J2)
-        JType = JacType.FULL
-    elif J1Type is JacType.DIAG and J2Type is JacType.FULL:
-        J = torch.diag_embed(J1) + J2
-        JType = JacType.FULL
-    else:
-        raise ValueError(
-            "`_jac_add_generic` method received an unknown "
-            "jacobian type, should be either `JacType.Full` or `JacType.DIAG`"
-        )
-
-    return J, JType
+        jac = self._jacobian(x, val)  # (B)x(in) -- the current Jacobian;
+        return jac @ jac_in
 
 
 class Sequential(nn.Sequential):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def forward(self, x: torch.Tensor, jacobian: bool = False, return_jac_type: bool = False):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
         xsh = x.shape
         if len(xsh) == 1:
             x = x.unsqueeze(0)
@@ -137,43 +147,39 @@ class Sequential(nn.Sequential):
         x = x.view(-1, xsh[-1])  # Nx(d)
 
         if jacobian:
-            Jseq = None
+            jac = None
 
             for module in self._modules.values():
                 val = module(x)
-                if Jseq is None:
-                    Jseq, JseqType = module._jacobian(x, val)
+                if jac is None:
+                    jac = module._jacobian(x, val)
                 else:
-                    Jseq, JseqType = module._jac_mul(x, val, Jseq, JseqType)
+                    jac = module._jac_mul(x, val, jac)
                 x = val
 
             x = x.view(xsh[:-1] + torch.Size([x.shape[-1]]))
-            if JseqType is JacType.DIAG:
-                Jseq = Jseq.view(xsh[:-1] + Jseq.shape[-1:])
+            if jac.jactype == JacType.DIAG:
+                jac = jac.view(xsh[:-1] + jac.shape[-1:])
             else:
-                Jseq = Jseq.view(xsh[:-1] + Jseq.shape[-2:])
+                jac = jac.view(xsh[:-1] + jac.shape[-2:])
 
-            if return_jac_type:
-                return x, Jseq, JseqType
-            else:
-                return x, Jseq
-        else:
-            for module in self._modules.values():
-                x = module(x)
-            x = x.view(xsh[:-1] + torch.Size([x.shape[-1]]))
+            return x, jac
 
-            return x
+        for module in self._modules.values():
+            x = module(x)
+        x = x.view(xsh[:-1] + torch.Size([x.shape[-1]]))
+        return x
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
-        _, J, JType = self.forward(x, jacobian=True, return_jac_type=True)
-        return J, JType
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
+        _, J = self.forward(x, jacobian=True)
+        return J
 
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType):
+    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac: torch.Tensor) -> Jacobian:
         for module in self._modules.values():
             val = module(x)
-            Jseq, JseqType = module._jac_mul(x, val, Jseq, JseqType)
+            jac = module._jac_mul(x, val, jac)
             x = val
-        return Jseq, JseqType
+        return jac
 
     def inverse(self):
         layers = [L.inverse() for L in reversed(self._modules.values())]
@@ -201,20 +207,18 @@ class Linear(nn.Linear):
         val = super().forward(x)
 
         if jacobian:
-            J, _ = self._jacobian(x, val)
-            return val, J
-        else:
-            return val
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
         b_sz = x.size()[0]
-        J = self.weight.unsqueeze(0).repeat(b_sz, 1, 1)
-        return J, JacType.FULL
+        jac = self.weight.unsqueeze(0).repeat(b_sz, 1, 1)
+        return jacobian(jac, JacType.FULL)
 
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType):
-        J, _ = self._jacobian(x, val)  # (batch)x(out)x(in)
-        Jseq, JseqType = _jac_mul_generic(J, Jseq, JseqType)
-        return Jseq, JseqType
+    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
+        jac = self._jacobian(x, val)  # (batch)x(out)x(in)
+        return jac @ jac_in
 
     def inverse(self):
         inv = Linear(in_features=self.out_features, out_features=self.in_features, bias=self.bias is not None)
@@ -236,98 +240,96 @@ class PosLinear(Linear):
             val = F.linear(x, F.softplus(self.weight), F.softplus(self.bias))
 
         if jacobian:
-            J, _ = self._jacobian(x, val)
-            return val, J
-        else:
-            return val
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
         b_sz = x.shape[0]
-        J = F.softplus(self.weight).unsqueeze(0).repeat(b_sz, 1, 1)
-        return J, JacType.FULL
+        jac = F.softplus(self.weight).unsqueeze(0).repeat(b_sz, 1, 1)
+        return jacobian(jac, JacType.FULL)
 
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType):
-        J, _ = self._jacobian(x, val)  # (batch)x(out)x(in)
-        Jseq, JseqType = _jac_mul_generic(J, Jseq, JseqType)
-        return Jseq, JseqType
+    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
+        jac = self._jacobian(x, val)  # (batch)x(out)x(in)
+        return jac @ jac_in
 
 
 class ReLU(ActivationJacobian, nn.ReLU):
     def __init__(self, *args, **kwargs):
         ActivationJacobian.__abstract_init__(self, nn.ReLU, *args, **kwargs)
 
-    def _jacobian(self, x, val):
-        J = (val > 0.0).type(val.dtype)  # XXX: can we avoid the type cast (it's expensive) ?
-        return J, JacType.DIAG
+    def _jacobian(self, x, val) -> Jacobian:
+        jac = (val > 0.0).type(val.dtype)
+        return jacobian(jac, JacType.DIAG)
 
 
 class ELU(ActivationJacobian, nn.ELU):
     def __init__(self, *args, **kwargs):
         ActivationJacobian.__abstract_init__(self, nn.ELU, *args, **kwargs)
 
-    def _jacobian(self, x, val):
-        J = torch.ones_like(val)
-        J[val < 0.0] = val[val < 0.0] + self.alpha
-        return J, JacType.DIAG
+    def _jacobian(self, x, val) -> Jacobian:
+        jac = torch.ones_like(val)
+        jac[val < 0.0] = val[val < 0.0] + self.alpha
+        return jacobian(jac, JacType.DIAG)
 
 
 class Hardshrink(ActivationJacobian, nn.Hardshrink):
     def __init__(self, *args, **kwargs):
         ActivationJacobian.__abstract_init__(self, nn.Hardshrink, *args, **kwargs)
 
-    def _jacobian(self, x, val):
-        J = torch.ones_like(val)
+    def _jacobian(self, x, val) -> Jacobian:
+        jac = torch.ones_like(val)
         # J[(-self.lambd < x) & (x < self.lambd)] = 0.0
-        J[val.abs() < 1e-3] = 0.0
-        return J, JacType.DIAG
+        jac[val.abs() < 1e-3] = 0.0
+        return jacobian(jac, JacType.DIAG)
 
 
 class Hardtanh(ActivationJacobian, nn.Hardtanh):
     def __init__(self, *args, **kwargs):
         ActivationJacobian.__abstract_init__(self, nn.Hardtanh, *args, **kwargs)
 
-    def _jacobian(self, x, val):
-        J = torch.zeros_like(val)
+    def _jacobian(self, x, val) -> Jacobian:
+        jac = torch.zeros_like(val)
         # J[(self.min_val < x) & (x < self.max_val)] = 1.0
-        J[val.abs() < 1.0] = 1.0
-        return J, JacType.DIAG
+        jac[val.abs() < 1.0] = 1.0
+        return jacobian(jac, JacType.DIAG)
 
 
 class LeakyReLU(ActivationJacobian, nn.LeakyReLU):
     def __init__(self, *args, **kwargs):
         ActivationJacobian.__abstract_init__(self, nn.LeakyReLU, *args, **kwargs)
 
-    def _jacobian(self, x, val):
-        J = torch.ones_like(val)
-        J[val < 0.0] = self.negative_slope
-        return J, JacType.DIAG
+    def _jacobian(self, x, val) -> Jacobian:
+        jac = torch.ones_like(val)
+        jac[val < 0.0] = self.negative_slope
+        return jacobian(jac, JacType.DIAG)
 
 
 class Sigmoid(ActivationJacobian, nn.Sigmoid):
     def __init__(self, *args, **kwargs):
         ActivationJacobian.__abstract_init__(self, nn.Sigmoid, *args, **kwargs)
 
-    def _jacobian(self, x, val):
-        J = val * (1.0 - val)
-        return J, JacType.DIAG
+    def _jacobian(self, x, val) -> Jacobian:
+        jac = val * (1.0 - val)
+        return jacobian(jac, JacType.DIAG)
 
 
 class Softplus(ActivationJacobian, nn.Softplus):
     def __init__(self, *args, **kwargs):
         ActivationJacobian.__abstract_init__(self, nn.Softplus, *args, **kwargs)
 
-    def _jacobian(self, x, val):
-        J = torch.sigmoid(self.beta * x)
-        return J, JacType.DIAG
+    def _jacobian(self, x, val) -> Jacobian:
+        jac = torch.sigmoid(self.beta * x)
+        return jacobian(jac, JacType.DIAG)
 
 
 class Tanh(ActivationJacobian, nn.Tanh):
     def __init__(self, *args, **kwargs):
         ActivationJacobian.__abstract_init__(self, nn.Tanh, *args, **kwargs)
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
-        J = 1.0 - val ** 2
-        return J, JacType.DIAG
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
+        jac = 1.0 - val ** 2
+        return jacobian(jac, JacType.DIAG)
 
     def inverse(self):
         return ArcTanh()
@@ -346,14 +348,13 @@ class ArcTanh(ActivationJacobian, nn.Tanh):
         )  # XXX: is it stable to compute log((1+xc)/(1-xc)) ? (that would be faster)
 
         if jacobian:
-            J, _ = self._jacobian(xc, val)
-            return val, J
-        else:
-            return val
+            jac = self._jacobian(xc, val)
+            return val, jac
+        return val
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
-        J = -1.0 / (x ** 2 - 1.0)
-        return J, JacType.DIAG
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
+        jac = -1.0 / (x ** 2 - 1.0)
+        return jacobian(jac, JacType.DIAG)
 
 
 class Reciprocal(nn.Module, ActivationJacobian):
@@ -365,14 +366,13 @@ class Reciprocal(nn.Module, ActivationJacobian):
         val = 1.0 / (x + self.b)
 
         if jacobian:
-            J, _ = self._jacobian(x, val)
-            return val, J
-        else:
-            return val
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
-        J = -((val) ** 2)
-        return J, JacType.DIAG
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
+        jac = -((val) ** 2)
+        return jacobian(jac, JacType.DIAG)
 
 
 class OneMinusX(nn.Module, ActivationJacobian):
@@ -383,17 +383,16 @@ class OneMinusX(nn.Module, ActivationJacobian):
         val = 1 - x
 
         if jacobian:
-            J, _ = self._jacobian(x, val)
-            return val, J
-        else:
-            return val
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
-        J = -torch.ones_like(x)
-        return J, JacType.DIAG
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
+        jac = -torch.ones_like(x)
+        return jacobian(jac, JacType.DIAG)
 
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq: torch.Tensor, JseqType: JacType):
-        return -Jseq, JseqType
+    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
+        return -jac_in
 
 
 class Sqrt(nn.Module, ActivationJacobian):
@@ -404,24 +403,23 @@ class Sqrt(nn.Module, ActivationJacobian):
         val = torch.sqrt(x)
 
         if jacobian:
-            J, _ = self._jacobian(x, val)
-            return val, J
-        else:
-            return val
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
-        J = -0.5 / val
-        return J, JacType.DIAG
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
+        jac = -0.5 / val
+        return jacobian(jac, JacType.DIAG)
 
 
 class BatchNorm1d(ActivationJacobian, nn.BatchNorm1d):
     def __init__(self, *args, **kwargs):
         ActivationJacobian.__abstract_init__(self, nn.BatchNorm1d, *args, **kwargs)
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
         B = x.shape[0]
-        J = self.running_var.sqrt().repeat(B, 1)
-        return J, JacType.DIAG
+        jac = self.running_var.sqrt().repeat(B, 1)
+        return jacobian(jac, JacType.DIAG)
 
 
 class ResidualBlock(nn.Module):
@@ -429,7 +427,7 @@ class ResidualBlock(nn.Module):
         super().__init__()
 
         # Are we given a sequence or should construct one?
-        if len(args) == 1 and isinstance(args[0], (self.modules.container.Sequential, Sequential)):
+        if len(args) == 1 and isinstance(args[0], Sequential):
             self._F = args[0]
         else:
             self._F = Sequential(*args)
@@ -449,37 +447,31 @@ class ResidualBlock(nn.Module):
             val = x + self._F(x)
 
         if jacobian:
-            J, _ = self._jacobian(x, val)
+            J = self._jacobian(x, val)
             return val, J
-        else:
-            return val
+        return val
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
-        J, JType = self._F._jacobian(x, val)
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
+        jac = self._F._jacobian(x, val)
 
         if self.apply_proj:
-            if JType is JacType.DIAG:
-                J = torch.diag_embed(J)
-                JType = JacType.FULL
-            J += self._projection.weight
+            if jac.jactype == JacType.DIAG:
+                jac = torch.diag_embed(jac)
+            jac += self._projection.weight
         else:
-            if JType is JacType.DIAG:
-                J += 1.0
+            if jac.jactype is JacType.DIAG:
+                jac += 1.0
             else:  # JacType.FULL
-                J += torch.eye(J.shape[0])
+                jac += torch.eye(jac.shape[0])
 
-        return J, JType
+        return jac
 
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq, JseqType: JacType):
-        JF, JFType = self._F._jac_mul(x, val, Jseq, JseqType)
+    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
+        jac = self._F._jac_mul(x, val, jac_in)
 
         if self.apply_proj:
-            JL, JLType = self._projection._jac_mul(x, val, Jseq, JseqType)
-            J, JType = _jac_add_generic(JL, JLType, JF, JFType)
-        else:
-            J, JType = _jac_add_generic(Jseq, JseqType, JF, JFType)
-
-        return J, JType
+            jac_in = self._projection._jac_mul(x, val, jac_in)
+        return jac + jac_in
 
 
 class Norm2(nn.Module):
@@ -491,18 +483,17 @@ class Norm2(nn.Module):
         val = torch.sum(x ** 2, dim=self.dim, keepdim=True)
 
         if jacobian:
-            J = self._jacobian(x, val)
-            return val, J
-        else:
-            return val
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
 
     def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
-        J = 2.0 * x.unsqueeze(1)
-        return J, JacType.FULL
+        jac = 2.0 * x.unsqueeze(1)
+        return jacobian(jac, JacType.FULL)
 
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq, JseqType: JacType):
-        J, _ = self._jacobian(x, val)  # (B)x(1)x(in) -- the current Jacobian
-        return _jac_mul_generic(J, Jseq, JseqType)
+    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
+        jac = self._jacobian(x, val)  # (B)x(1)x(in) -- the current Jacobian
+        return jac @ jac_in
 
 
 class RBF(nn.Module):
@@ -528,7 +519,7 @@ class RBF(nn.Module):
                 f"Expected parameter ``beta`` to either be a float or torch tensor but received {beta}"
             )
 
-    def __dist2__(self, x: torch.Tensor):
+    def __dist2__(self, x: torch.Tensor) -> torch.Tensor:
         x_norm = (x ** 2).sum(1).view(-1, 1)
         points_norm = (self.points ** 2).sum(1).view(1, -1)
         d2 = x_norm + points_norm - 2.0 * torch.mm(x, self.points.transpose(0, 1))
@@ -541,15 +532,14 @@ class RBF(nn.Module):
         if jacobian:
             J = self._jacobian(x, val)
             return val, J
-        else:
-            return val
+        return val
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor):
-        T1 = -2.0 * self.beta * val  # BxNxM
-        T2 = x.unsqueeze(1) - self.points.unsqueeze(0)
-        J = T1.unsqueeze(-1) * T2
-        return J, JacType.FULL
+    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
+        t1 = -2.0 * self.beta * val  # BxNxM
+        t2 = x.unsqueeze(1) - self.points.unsqueeze(0)
+        jac = t1.unsqueeze(-1) * t2
+        return jacobian(jac, JacType.FULL)
 
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, Jseq, JseqType: JacType):
-        J, _ = self._jacobian(x, val)  # (B)x(1)x(in) -- the current Jacobian
-        return _jac_mul_generic(J, Jseq, JseqType)
+    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
+        jac = self._jacobian(x, val)  # (B)x(1)x(in) -- the current Jacobian
+        return jac @ jac_in

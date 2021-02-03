@@ -32,4 +32,3 @@ jobs:
         pip install pytest coverage
         coverage run -m pytest
         coverage report -m
-        coverage report

@@ -167,8 +167,9 @@ class DiscreteCurve(BasicCurve):
             .expand(self.begin.shape[0], -1, self.begin.shape[1]),  # Bx(_num_nodes-2)xD
         )
         if params is None:
-            params = self.t * self.end.unsqueeze(1) + \
-                (1 - self.t) * self.begin.unsqueeze(1)  # Bx(_num_nodes)xD
+            params = self.t * self.end.unsqueeze(1) + (1 - self.t) * self.begin.unsqueeze(
+                1
+            )  # Bx(_num_nodes)xD
         if self._requires_grad:
             self.register_parameter("params", nn.Parameter(params))
         else:
@@ -184,7 +185,7 @@ class DiscreteCurve(BasicCurve):
                 self.t,
                 torch.ones(B, 1, D, dtype=self.t.dtype, device=self.device),
             ),
-            dim=1
+            dim=1,
         )  # Bx(num_nodes)xD
         a = (end_nodes - start_nodes) / (t0[:, 1:] - t0[:, :-1])  # Bx(num_edges)xD
         b = start_nodes - a * t0[:, :-1]  # Bx(num_edges)xD
@@ -194,10 +195,12 @@ class DiscreteCurve(BasicCurve):
         elif t.ndim == 2:
             tt = t  # Bx|t|
         else:
-            raise Exception('t must have at most 2 dimensions')
+            raise Exception("t must have at most 2 dimensions")
         idx = (
-            torch.floor(tt * num_edges).clamp(min=0, max=num_edges - 1).long()  # Bx|t|
-        ).unsqueeze(2).repeat(1, 1, D)  # Bx|t|xD, this assumes that nodes are equi-distant
+            (torch.floor(tt * num_edges).clamp(min=0, max=num_edges - 1).long())  # Bx|t|
+            .unsqueeze(2)
+            .repeat(1, 1, D)
+        )  # Bx|t|xD, this assumes that nodes are equi-distant
         result = torch.gather(a, 1, idx) * tt.unsqueeze(2) + torch.gather(b, 1, idx)  # Bx|t|xD
         if B == 1:
             result = result.squeeze(0)  # |t|xD
@@ -316,29 +319,29 @@ class CubicSpline(BasicCurve):
             for i in range(num_edges - 1):
                 si = 4 * i  # start index
                 fill = torch.tensor([1.0, t[i], t[i] ** 2, t[i] ** 3], dtype=self.begin.dtype)
-                zeroth[i, si:(si + 4)] = fill
-                zeroth[i, (si + 4):(si + 8)] = -fill
+                zeroth[i, si : (si + 4)] = fill
+                zeroth[i, (si + 4) : (si + 8)] = -fill
 
             first = torch.zeros(num_edges - 1, 4 * num_edges, dtype=self.begin.dtype)
             for i in range(num_edges - 1):
                 si = 4 * i  # start index
                 fill = torch.tensor([0.0, 1.0, 2.0 * t[i], 3.0 * t[i] ** 2], dtype=self.begin.dtype)
-                first[i, si:(si + 4)] = fill
-                first[i, (si + 4):(si + 8)] = -fill
+                first[i, si : (si + 4)] = fill
+                first[i, (si + 4) : (si + 8)] = -fill
 
             second = torch.zeros(num_edges - 1, 4 * num_edges, dtype=self.begin.dtype)
             for i in range(num_edges - 1):
                 si = 4 * i  # start index
                 fill = torch.tensor([0.0, 0.0, 6.0 * t[i], 2.0], dtype=self.begin.dtype)
-                second[i, si:(si + 4)] = fill
-                second[i, (si + 4):(si + 8)] = -fill
+                second[i, si : (si + 4)] = fill
+                second[i, (si + 4) : (si + 8)] = -fill
 
             constraints = torch.cat((end_points, zeroth, first, second))
             self.constraints = constraints
 
             # Compute null space, which forms our basis
             _, S, V = torch.svd(constraints, some=False)
-            basis = V[:, S.numel():]  # (num_coeffs)x(intr_dim)
+            basis = V[:, S.numel() :]  # (num_coeffs)x(intr_dim)
 
             return basis
 

@@ -3,10 +3,10 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Optional, Tuple, Union
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-import numpy as np
 
 
 class JacType(Enum):
@@ -17,40 +17,43 @@ class JacType(Enum):
         FULL:   The Jacobian is a matrix of whatever size.
     """
 
-    DIAG = 'diag'
-    FULL = 'full'
-    CONV = 'conv'
-    
+    DIAG = "diag"
+    FULL = "full"
+    CONV = "conv"
+
     def __eq__(self, other: Union[str, Enum]) -> bool:
         other = other.value if isinstance(other, Enum) else str(other)
         return self.value.lower() == other.lower()
-    
+
 
 class Jacobian(torch.Tensor):
-    """ Class representing a jacobian tensor, subclasses from torch.Tensor 
-        Requires the additional `jactype` parameter to initialize, which
-        is a string indicating the jacobian type
+    """Class representing a jacobian tensor, subclasses from torch.Tensor
+    Requires the additional `jactype` parameter to initialize, which
+    is a string indicating the jacobian type
     """
+
     def __init__(self, tensor, jactype):
         available_jactype = [item.value for item in JacType]
         if jactype not in available_jactype:
-            raise ValueError(f'Tried to initialize jacobian tensor with unknown jacobian type {jactype}.'
-                             f' Please choose between {available_jactype}')
+            raise ValueError(
+                f"Tried to initialize jacobian tensor with unknown jacobian type {jactype}."
+                f" Please choose between {available_jactype}"
+            )
         self.jactype = jactype
-    
+
     @staticmethod
     def __new__(cls, x, jactype, *args, **kwargs):
         cls.jactype = jactype
         return super().__new__(cls, x, *args, **kwargs)
-    
+
     def __repr__(self):
         tensor_repr = super().__repr__()
-        tensor_repr = tensor_repr.replace('tensor', 'jacobian')
-        tensor_repr += f'\n jactype={self.jactype.value if isinstance(self.jactype, Enum) else self.jactype}'
+        tensor_repr = tensor_repr.replace("tensor", "jacobian")
+        tensor_repr += f"\n jactype={self.jactype.value if isinstance(self.jactype, Enum) else self.jactype}"
         return tensor_repr
-    
+
     def __add__(self, other):
-        if isinstance(other, Jacobian):            
+        if isinstance(other, Jacobian):
             if self.jactype == other.jactype:
                 res = torch.add(self, other)
                 return jacobian(res, self.jactype)
@@ -59,14 +62,14 @@ class Jacobian(torch.Tensor):
                 return jacobian(res, JacType.FULL)
             if self.jactype == JacType.DIAG and other.jactype == JacType.FULL:
                 res = torch.add(torch.diag_embed(self), other)
-                return jacobian(res, JacType.FULL)                
+                return jacobian(res, JacType.FULL)
             if self.jactype == JacType.CONV and other.jactype == JacType.CONV:
                 res = torch.add(self, other)
                 return jacobian(res, JacType.CONV)
-            raise ValueError('Unknown addition of jacobian matrices')
-        
+            raise ValueError("Unknown addition of jacobian matrices")
+
         return super().__add__(other)
-        
+
     def __matmul__(self, other):
         if isinstance(other, Jacobian):
             # diag * diag
@@ -90,9 +93,9 @@ class Jacobian(torch.Tensor):
                 if other == JacType.CONV:
                     res = self * other
                     return jacobian(res, JacType.CONV)
-           
-        raise ValueError('Unknown matrix multiplication of jacobian matrices')
-    
+
+        raise ValueError("Unknown matrix multiplication of jacobian matrices")
+
 
 def jacobian(tensor, jactype):
     """ Initialize a jacobian tensor by a specified jacobian type """
@@ -126,8 +129,7 @@ class ActivationJacobian(ABC):
         attains value val."""
         pass
 
-    def _jac_mul(
-        self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
+    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
         """Multiply the Jacobian at x with M.
         This can potentially be done more efficiently than
         first computing the Jacobian, and then performing the
@@ -557,9 +559,9 @@ class _BaseJacConv:
     def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
         w = self._conv_to_toeplitz(x.shape[1:])
         w = w.unsqueeze(0).repeat(x.shape[0], 1, 1)
-        return jacobian(w, JacType.CONV)        
+        return jacobian(w, JacType.CONV)
 
-    
+
 class Conv1d(_BaseJacConv, nn.Conv1d):
     def _conv_to_toeplitz(self, input_shape):
         identity = torch.eye(np.prod(input_shape).item()).reshape([-1] + list(input_shape))

@@ -124,11 +124,12 @@ def test_jac_return(model, return_jac):
     else:
         assert isinstance(output, torch.Tensor)
 
+
 _testcases = [
-    (nnj.jacobian(torch.ones(5, 10, 10), 'full'), nnj.jacobian(torch.ones(5, 10, 10), 'full')),
-    (nnj.jacobian(torch.ones(5, 10, 10), 'full'), nnj.jacobian(torch.ones(5, 10), 'diag')),
-    (nnj.jacobian(torch.ones(5, 10), 'diag'), nnj.jacobian(torch.ones(5, 10, 10), 'full')),
-    (nnj.jacobian(torch.ones(5, 10), 'diag'), nnj.jacobian(torch.ones(5, 10), 'diag')),
+    (nnj.jacobian(torch.ones(5, 10, 10), "full"), nnj.jacobian(torch.ones(5, 10, 10), "full")),
+    (nnj.jacobian(torch.ones(5, 10, 10), "full"), nnj.jacobian(torch.ones(5, 10), "diag")),
+    (nnj.jacobian(torch.ones(5, 10), "diag"), nnj.jacobian(torch.ones(5, 10, 10), "full")),
+    (nnj.jacobian(torch.ones(5, 10), "diag"), nnj.jacobian(torch.ones(5, 10), "diag")),
 ]
 
 
@@ -146,6 +147,7 @@ def test_add(cases):
         # if not same type, only diag should be 2
         j_out_diag = torch.stack([jo.diag() for jo in j_out]).flatten()
         assert all(j_out_diag == 2 * torch.ones_like(j_out_diag))
+
 
 @pytest.mark.parametrize("cases", _testcases)
 def test_matmul(cases):

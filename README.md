@@ -22,7 +22,7 @@ working with manifold data.
 
 Key to working with Riemannian geometry is the ability to compute jacobians. The jacobian matrix
 contains the first order partial derivatives. `stochman.nnj` provides plug-in replacements for the many 
-used `torch.nn` layers such as `Linear`, `BatchNorm1d` ect. and commonly used activation functions such as `ReLU`,
+used `torch.nn` layers such as `Linear`, `BatchNorm1d` etc. and commonly used activation functions such as `ReLU`,
 `Sigmoid` etc. that enables fast computations of jacobians between the input to the layer and the output. 
 
 ``` python

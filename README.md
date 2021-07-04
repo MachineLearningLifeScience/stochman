@@ -1,4 +1,4 @@
-![Logo](stochman.png)
+![Logo](stochman_{{ctx.theme}}.png)
 ---
 
 # StochMan - Stochastic Manifolds made easier

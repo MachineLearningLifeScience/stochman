@@ -1,7 +1,4 @@
-::if ctx.theme == "dark"
-![Logo](stochman_dark.png)
-::else
-![Logo](stochman_light.png)
+![Logo](stochman.png)
 ---
 
 # StochMan - Stochastic Manifolds made easier

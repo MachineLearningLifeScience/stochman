@@ -13,6 +13,7 @@ class BasicCurve(ABC, nn.Module):
         end: torch.Tensor,
         num_nodes: int = 5,
         requires_grad: bool = True,
+        device = None,
         *args,
         **kwargs,
     ) -> None:

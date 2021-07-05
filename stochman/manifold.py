@@ -300,7 +300,7 @@ class Manifold(ABC):
                 of the chosen curve family is applied.
         """
         if init_curve is None:
-            curve = CubicSpline(p0, p1, device=p0.device)
+            curve = CubicSpline(p0, p1)
         else:
             curve = init_curve
             curve.begin = p0

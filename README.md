@@ -62,7 +62,7 @@ If you want to cite the framework feel free to use this (but only if you loved i
 @article{detlefsen2021stochman,
   title={StochMan},
   author={Nicki S. Detlefsen and Dimitrios Kalatzis and Søren Hauberg},
-  journal={GitHub. Note: https://github.com/CenterBioML/stochman},
+  journal={GitHub. Note: https://github.com/MachineLearningLifeScience/stochman/},
   year={2021}
 }
 ```

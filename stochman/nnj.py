@@ -51,6 +51,10 @@ class Jacobian(torch.Tensor):
         tensor_repr = tensor_repr.replace("tensor", "jacobian")
         tensor_repr += f"\n jactype={self.jactype.value if isinstance(self.jactype, Enum) else self.jactype}"
         return tensor_repr
+    
+    def view(self, *args, **kwargs):
+        out = super().view(*args, **kwargs)
+        return jacobian(out, self.jactype)
 
     def __add__(self, other):
         if isinstance(other, Jacobian):

@@ -1,4 +1,4 @@
-![Logo](stochman.png)
+![Logo](images/stochman.png)
 ---
 
 # StochMan - Stochastic Manifolds made easier

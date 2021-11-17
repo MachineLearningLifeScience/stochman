@@ -1,3 +1,4 @@
+pytest
 wheel
 twine==1.13.0
 flake8

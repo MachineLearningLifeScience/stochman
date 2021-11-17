@@ -13,7 +13,6 @@ class BasicCurve(ABC, nn.Module):
         end: torch.Tensor,
         num_nodes: int = 5,
         requires_grad: bool = True,
-        device=None,
         *args,
         **kwargs,
     ) -> None:
@@ -201,7 +200,7 @@ class DiscreteCurve(BasicCurve):
             (torch.floor(tt * num_edges).clamp(min=0, max=num_edges - 1).long())  # Bx|t|
             .unsqueeze(2)
             .repeat(1, 1, D)
-        )  # Bx|t|xD, this assumes that nodes are equi-distant
+        ).to(self.device)  # Bx|t|xD, this assumes that nodes are equi-distant
         result = torch.gather(a, 1, idx) * tt.unsqueeze(2) + torch.gather(b, 1, idx)  # Bx|t|xD
         if B == 1:
             result = result.squeeze(0)  # |t|xD
@@ -221,7 +220,7 @@ class DiscreteCurve(BasicCurve):
         return C
 
     def __setitem__(self, indices, curves) -> None:
-        self.params[indices] = curves.params.squeeze()
+        self.params[indices].data = curves.params.squeeze()
 
     def constant_speed(
         self, metric=None, t: Optional[torch.Tensor] = None
@@ -399,7 +398,7 @@ class CubicSpline(BasicCurve):
         return C
 
     def __setitem__(self, indices, curves) -> None:
-        self.params[indices] = curves.params
+        self.params[indices].data = curves.params
 
     def deriv(self, t: Optional[torch.Tensor] = None) -> torch.Tensor:
         """

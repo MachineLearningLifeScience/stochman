@@ -8,7 +8,7 @@ from stochman import curves
 class TestCurves:
     @pytest.mark.parametrize("requires_grad", [True, False])
     @pytest.mark.parametrize("batch_dim", [1, 5])
-    @pytest.mark.parametrize("device", ["cpu", "cuda"])
+    @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
     def test_curve_evaluation(self, curve_class, requires_grad, batch_dim, device):
         if not torch.cuda.is_available() and device == "cuda":
             pytest.skip("test requires cuda")
@@ -27,7 +27,7 @@ class TestCurves:
         assert c.params.device == torch.device(device)
 
         eval_nodes = 10
-        t = torch.linspace(0, 1, eval_nodes)
+        t = torch.linspace(0, 1, eval_nodes).to(device)
         out = c(t)
         assert isinstance(out, torch.Tensor)
         assert out.device == torch.device(device)

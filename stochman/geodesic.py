@@ -94,7 +94,7 @@ def geodesic_minimizing_energy(curve, manifold, optimizer=torch.optim.Adam, max_
             break
         # if k % (max_iter // 10) == 0:
         #    curve.constant_speed(manifold)
-    #curve.constant_speed(manifold)
+    # curve.constant_speed(manifold)
     return max_grad < thresh
 
 

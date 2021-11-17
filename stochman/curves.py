@@ -13,7 +13,7 @@ class BasicCurve(ABC, nn.Module):
         end: torch.Tensor,
         num_nodes: int = 5,
         requires_grad: bool = True,
-        device = None,
+        device=None,
         *args,
         **kwargs,
     ) -> None:
@@ -41,11 +41,11 @@ class BasicCurve(ABC, nn.Module):
 
     @property
     def device(self):
-        """ Returns the device of the curve. """
+        """Returns the device of the curve."""
         return self.params.device
 
     def __len__(self):
-        """ Returns the batch dimension e.g. the number of curves """
+        """Returns the batch dimension e.g. the number of curves"""
         return self.begin.shape[0]
 
     def plot(self, t0: float = 0.0, t1: float = 1.0, N: int = 100, *plot_args, **plot_kwargs):

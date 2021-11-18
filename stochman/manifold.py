@@ -5,10 +5,11 @@ from typing import Optional, Tuple, Union
 import numpy as np
 import torch
 from torch.autograd import grad
+from torch.distributions import kl_divergence
 
 from stochman.curves import BasicCurve, CubicSpline
 from stochman.geodesic import geodesic_minimizing_energy, shooting_geodesic
-from stochman.utilities import squared_manifold_distance
+from stochman.utilities import squared_manifold_distance, kl_by_sampling
 
 
 class Manifold(ABC):
@@ -661,3 +662,36 @@ class LocalVarMetric(Manifold):
 
         ddc_tensor = torch.cat(ddc, dim=1).t()  # NxD
         return ddc_tensor
+
+
+class StochasticManifold(Manifold):
+    """
+    A class for computing Stochastic Manifolds and defining
+    a metric in a latent space using the Fisher-Rao metric.
+    """
+
+    def __init__(self, model: torch.nn.Module) -> None:
+        """
+        Class constructor:
+
+        Arguments:
+        - model: a torch module that implements a `decode(z: Tensor) -> Distribution`.
+        """
+        super().__init__()
+
+        self.model = model
+        assert "decode" in dir(model)
+
+    def curve_energy(self, curve: BasicCurve) -> torch.Tensor:
+        dt = (curve[:-1] - curve[1:]).pow(2).sum(dim=-1, keepdim=True)  # (N-1)x1
+        dist1 = self.model.decode(dt[:-1])
+        dist2 = self.model.decode(dt[1:])
+
+        try:
+            kl = kl_divergence(dist1, dist2)
+        except Exception:
+            # TODO: fix the exception. Is there a way of knowing if kl_div is
+            # implemented for the distribution?
+            kl = kl_by_sampling(dist1, dist2)
+
+        return (kl * dt).sum()

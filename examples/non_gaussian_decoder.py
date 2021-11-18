@@ -17,7 +17,7 @@ from torch.distributions import Poisson
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 
-from stochman.manifold import StochasticManifold
+from stochman.manifold import StatisticalManifold
 
 
 class TranslatedSigmoid(nn.Module):
@@ -150,7 +150,7 @@ class DecoderWithUQ(nn.Module):
 
 if __name__ == "__main__":
     dec = DecoderWithUQ()
-    dec_manifold = StochasticManifold(dec)
+    dec_manifold = StatisticalManifold(dec)
     print(dec_manifold)
     zs = torch.randn(64, 2)
     rates = dec.decode(zs)

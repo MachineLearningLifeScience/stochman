@@ -667,7 +667,7 @@ class LocalVarMetric(Manifold):
         return ddc_tensor
 
 
-class StochasticManifold(Manifold):
+class StatisticalManifold(Manifold):
     """
     A class for computing Stochastic Manifolds and defining
     a geometry in the latent space of a certain model

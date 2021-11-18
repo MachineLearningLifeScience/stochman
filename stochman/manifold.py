@@ -712,7 +712,7 @@ class StochasticManifold(Manifold):
             # TODO: fix the exception.
             raise ValueError("Did you forget to register your KL?")
 
-        return (kl * dt).sum()
+        return kl.sum() * (2 * (dt.mean() ** -1))
 
     def curve_length(self, curve: BasicCurve) -> torch.Tensor:
         raise NotImplementedError

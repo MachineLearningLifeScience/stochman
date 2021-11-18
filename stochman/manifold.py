@@ -9,7 +9,7 @@ from torch.distributions import kl_divergence
 
 from stochman.curves import BasicCurve, CubicSpline
 from stochman.geodesic import geodesic_minimizing_energy, shooting_geodesic
-from stochman.utilities import squared_manifold_distance, kl_by_sampling
+from stochman.utilities import squared_manifold_distance
 
 
 class Manifold(ABC):
@@ -667,7 +667,20 @@ class LocalVarMetric(Manifold):
 class StochasticManifold(Manifold):
     """
     A class for computing Stochastic Manifolds and defining
-    a metric in a latent space using the Fisher-Rao metric.
+    a geometry in the latent space of a certain model
+    using the pullback of the Fisher-Rao metric.
+
+    The methods for computing shortest paths are layed out
+    in
+        Pulling Back Information Geometry
+        TODO: Add authors and the rest of the info.
+
+    TODO:
+        -  Right now we are getting geodesics by computing shortest paths.What about
+           computing the metric? The code we have for approximating the FR
+           metric is flimsy. Søren had the idea of having a `kl_divergence`-like
+           interface for computing FRs, and then using Jacobians to get an approximation
+           of the metric itself.
     """
 
     def __init__(self, model: torch.nn.Module) -> None:
@@ -690,8 +703,10 @@ class StochasticManifold(Manifold):
         try:
             kl = kl_divergence(dist1, dist2)
         except Exception:
-            # TODO: fix the exception. Is there a way of knowing if kl_div is
-            # implemented for the distribution?
-            kl = kl_by_sampling(dist1, dist2)
+            # TODO: fix the exception.
+            raise ValueError("Did you forget to register your KL?")
 
         return (kl * dt).sum()
+
+    def metric(self, points: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError

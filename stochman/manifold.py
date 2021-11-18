@@ -16,6 +16,9 @@ class Manifold(ABC):
     """
     A common interface for manifolds. Specific manifolds should inherit
     from this abstract base class abstraction.
+
+    TODO:
+    - Add examples to show the differences between Manifold and EmbeddedManifold.
     """
 
     def curve_energy(self, curve: BasicCurve) -> torch.Tensor:
@@ -689,6 +692,9 @@ class StochasticManifold(Manifold):
 
         Arguments:
         - model: a torch module that implements a `decode(z: Tensor) -> Distribution`.
+
+        TODO:
+            - Should we inherit from EmbeddedManifold and use the `embed` function instead?
         """
         super().__init__()
 
@@ -697,8 +703,8 @@ class StochasticManifold(Manifold):
 
     def curve_energy(self, curve: BasicCurve) -> torch.Tensor:
         dt = (curve[:-1] - curve[1:]).pow(2).sum(dim=-1, keepdim=True)  # (N-1)x1
-        dist1 = self.model.decode(dt[:-1])
-        dist2 = self.model.decode(dt[1:])
+        dist1 = self.model.decode(curve[:-1])
+        dist2 = self.model.decode(curve[1:])
 
         try:
             kl = kl_divergence(dist1, dist2)
@@ -707,6 +713,9 @@ class StochasticManifold(Manifold):
             raise ValueError("Did you forget to register your KL?")
 
         return (kl * dt).sum()
+
+    def curve_length(self, curve: BasicCurve) -> torch.Tensor:
+        raise NotImplementedError
 
     def metric(self, points: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError

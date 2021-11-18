@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import Poisson
 from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
 
 from stochman.manifold import StochasticManifold
 
@@ -30,7 +31,7 @@ class TranslatedSigmoid(nn.Module):
           Negative values give nice latent spaces
     """
 
-    def __init__(self, beta: float = 1.5) -> None:
+    def __init__(self, beta: float = -1.5) -> None:
         super(TranslatedSigmoid, self).__init__()
         self.beta = nn.Parameter(torch.tensor([beta]))
 
@@ -60,12 +61,12 @@ class DecoderWithUQ(nn.Module):
         self.mean = nn.Sequential(nn.Linear(2, 10), nn.Softplus())
 
         angles = torch.rand((100,)) * 2 * np.pi
-        self.circle = 3.0 * torch.vstack((torch.cos(angles), torch.sin(angles))).T
+        self.encodings = 3.0 * torch.vstack((torch.cos(angles), torch.sin(angles))).T
         kmeans = KMeans(n_clusters=70)
-        kmeans.fit(self.circle.detach().numpy())
+        kmeans.fit(self.encodings.detach().numpy())
         self.cluster_centers = torch.from_numpy(kmeans.cluster_centers_).type(torch.float)
 
-        self.translated_sigmoid = TranslatedSigmoid(beta=-1.5)
+        self.translated_sigmoid = TranslatedSigmoid(beta=-2.5)
 
     def decode(self, z: torch.Tensor) -> Poisson:
         """
@@ -75,7 +76,7 @@ class DecoderWithUQ(nn.Module):
         dec_mean = self.mean(z)
         uncertain_mean = 1e5 * torch.ones_like(dec_mean)
 
-        mean = closeness * dec_mean + (1 - closeness) * uncertain_mean
+        mean = (1 - closeness) * dec_mean + closeness * uncertain_mean
         return Poisson(rate=mean)
 
     def min_distance(self, z: torch.Tensor) -> torch.Tensor:
@@ -98,6 +99,54 @@ class DecoderWithUQ(nn.Module):
 
         return min_dist.view(zsh[:-1])
 
+    def plot_latent_space(self, ax=None, plot_points=True):
+        """
+        FOR DIMITRIS:
+
+        To plot the mean entropy, you'll need to
+        change the output of self.reweight to
+        the distribution's parameters. I commented
+        the relevant piece of code.
+        """
+        if ax is None:
+            _, ax = plt.subplots(1, 1, figsize=(7, 7))
+
+        encodings = self.encodings.detach().numpy()
+        enc_x, enc_y = encodings[:, 0], encodings[:, 1]
+
+        n_x, n_y = 300, 300
+        x_lims = (enc_x.min() - 0.1, enc_x.max() + 0.1)
+        y_lims = (enc_y.min() - 0.1, enc_y.max() + 0.1)
+        z1 = torch.linspace(*x_lims, n_x)
+        z2 = torch.linspace(*y_lims, n_x)
+
+        entropy_K = np.zeros((n_y, n_x))
+        zs = torch.Tensor([[x, y] for x in z1 for y in z2])
+        positions = {
+            (x.item(), y.item()): (i, j) for j, x in enumerate(z1) for i, y in enumerate(reversed(z2))
+        }
+
+        dist_ = self.decode(zs)
+        entropy_ = dist_.rate.mean(dim=1)
+        if len(entropy_.shape) > 1:
+            # In some distributions, we decode
+            # to a higher dimensional space.
+            entropy_ = torch.mean(entropy_, dim=1)
+
+        for l, (x, y) in enumerate(zs):
+            i, j = positions[(x.item(), y.item())]
+            entropy_K[i, j] = entropy_[l]
+
+        if plot_points:
+            ax.scatter(
+                self.encodings[:, 0],
+                self.encodings[:, 1],
+                marker="o",
+                c="w",
+                edgecolors="k",
+            )
+        ax.imshow(entropy_K, extent=[*x_lims, *y_lims], cmap="Blues")
+
 
 if __name__ == "__main__":
     dec = DecoderWithUQ()
@@ -105,4 +154,9 @@ if __name__ == "__main__":
     print(dec_manifold)
     zs = torch.randn(64, 2)
     rates = dec.decode(zs)
-    geodesic, _ = dec_manifold.connecting_geodesic(zs[0], zs[1])
+
+    dec.plot_latent_space()
+    geodesic, success = dec_manifold.connecting_geodesic(dec.encodings[0], dec.encodings[1])
+    print(success)
+    geodesic.plot()
+    plt.show()

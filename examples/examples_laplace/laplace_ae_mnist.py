@@ -1,9 +1,14 @@
+#!/usr/bin/env python3
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from torchvision.datasets import MNIST
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from ae_models import AE_bivariate
+from ae_models import AE_mnist
 
 from laplace import Laplace
 
@@ -18,24 +23,23 @@ n_epochs = 30
 batch_size = 128  # full batch
 true_sigma_noise = 0.3
 
-# create simple sinusoid data set
-def swiss_roll_2d(noise=0.2, n_samples=100):
-  z = 2.0 * np.pi * (1 + 2 * np.random.rand(n_samples))
-  x = z * np.cos(z) + noise*np.random.randn(n_samples)
-  y = z * np.sin(z) + noise*np.random.randn(n_samples)
-  #x = x * 0.05
-  #y = y * 0.05
-  return np.stack([x,y]).T, z
+# create mnist data set
+load = False
+filename = '../models/vae_normal'
 
-X_train, y_train = swiss_roll_2d(n_samples=N)
-X_test, y_test = swiss_roll_2d(n_samples=N_test)
+mnist = MNIST('../data/', download=True)
+X_train = mnist.train_data.reshape(-1, 784).numpy() / 255.0
+y_train = mnist.train_labels.numpy()
+
+X_test = mnist.test_data.reshape(-1, 784).numpy() / 255.0
+y_test = mnist.test_labels.numpy()
 
 X_train = torch.from_numpy(X_train).float()
 X_test = torch.from_numpy(X_test).float()
 
 train_loader = DataLoader(TensorDataset(X_train), batch_size=batch_size)
 
-model = AE_bivariate(latent_size=2)
+model = AE_mnist(latent_size=2)
 model.fit(X_train, n_epochs=n_epochs, learning_rate=1e-3, batch_size=batch_size, verbose=True, labels=y_train)
 
 # Visualize Latent Space

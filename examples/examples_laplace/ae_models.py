@@ -17,21 +17,25 @@ class AE_bivariate(nn.Module):
         super(AE_bivariate, self).__init__()
         self.latent_size = latent_size
 
-        # self.encoder = nn.Sequential(nn.Linear(2, 50),
-        #                             nn.Tanh(),
-        #                             nn.Linear(50, latent_size))
+        # self.encoder = nn.Sequential(nn.Linear(2, 512),
+        #                                     nn.ReLU(),
+        #                                     nn.Linear(512, 256),
+        #                                     nn.ReLU(),
+        #                                     nn.Linear(256, latent_size))
         #
-        # self.decoder = nn.Sequential(nn.Linear(latent_size, 50),
-        #                             nn.Tanh(),
-        #                             nn.Linear(50, 2))
+        # self.decoder = nn.Sequential(nn.Linear(latent_size, 512),
+        #                             nn.ReLU(),
+        #                             nn.Linear(512, 256),
+        #                             nn.ReLU(),
+        #                             nn.Linear(256, 2))
 
-        # self.encoder = nn.Sequential(nn.Linear(2, 50),
-        #                             nn.Tanh(),
-        #                             nn.Linear(50, latent_size))
-        #
-        # self.decoder = nn.Sequential(nn.Linear(latent_size, 50),
-        #                             nn.Tanh(),
-        #                             nn.Linear(50, 2))
+        self.encoder = nn.Sequential(nn.Linear(2, 50),
+                                    nn.Tanh(),
+                                    nn.Linear(50, latent_size))
+
+        self.decoder = nn.Sequential(nn.Linear(latent_size, 50),
+                                    nn.Tanh(),
+                                    nn.Linear(50, 2))
 
         self.criterion = torch.nn.MSELoss(reduction='sum')
         self.optimizer = torch.optim.Adam(self.parameters(),

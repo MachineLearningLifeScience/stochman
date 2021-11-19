@@ -6,210 +6,59 @@ from typing import Optional, Tuple, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch import nn
+from torch import nn, Tensor
 
+from math import prod
 
-class JacType(Enum):
-    """Class for declaring the type of an intermediate Jacobian.
-    Options are:
-        DIAG:   The Jacobian is a (B)x(N) matrix that represents
-                a diagonal matrix of size (B)x(N)x(N)
-        FULL:   The Jacobian is a matrix of whatever size.
-    """
+class Identity(nn.Module):
+    def __init__(self):
+        super().__init__()
 
-    DIAG = "diag"
-    FULL = "full"
-    CONV = "conv"
-
-    def __eq__(self, other: Union[str, Enum]) -> bool:
-        other = other.value if isinstance(other, Enum) else str(other)
-        return self.value.lower() == other.lower()
-
-
-class Jacobian(torch.Tensor):
-    """Class representing a jacobian tensor, subclasses from torch.Tensor
-    Requires the additional `jactype` parameter to initialize, which
-    is a string indicating the jacobian type
-    """
-
-    def __init__(self, tensor, jactype):
-        available_jactype = [item.value for item in JacType]
-        if jactype not in available_jactype:
-            raise ValueError(
-                f"Tried to initialize jacobian tensor with unknown jacobian type {jactype}."
-                f" Please choose between {available_jactype}"
-            )
-        self.jactype = jactype
-
-    @staticmethod
-    def __new__(cls, x, jactype, *args, **kwargs):
-        cls.jactype = jactype
-        return super().__new__(cls, x, *args, **kwargs)
-
-    def __repr__(self):
-        tensor_repr = super().__repr__()
-        tensor_repr = tensor_repr.replace("tensor", "jacobian")
-        tensor_repr += f"\n jactype={self.jactype.value if isinstance(self.jactype, Enum) else self.jactype}"
-        return tensor_repr
-
-    def view(self, *args, **kwargs):
-        out = super().view(*args, **kwargs)
-        return jacobian(out, self.jactype)
-
-    def __add__(self, other):
-        if isinstance(other, Jacobian):
-            if self.jactype == other.jactype:
-                res = torch.add(self, other)
-                return jacobian(res, self.jactype)
-            if self.jactype == JacType.FULL and other.jactype == JacType.DIAG:
-                res = torch.add(self, torch.diag_embed(other))
-                return jacobian(res, JacType.FULL)
-            if self.jactype == JacType.DIAG and other.jactype == JacType.FULL:
-                res = torch.add(torch.diag_embed(self), other)
-                return jacobian(res, JacType.FULL)
-            if self.jactype == JacType.CONV and other.jactype == JacType.CONV:
-                res = torch.add(self, other)
-                return jacobian(res, JacType.CONV)
-            raise ValueError("Unknown addition of jacobian matrices")
-
-        return super().__add__(other)
-
-    def __matmul__(self, other):
-        if isinstance(other, Jacobian):
-            # diag * diag
-            if self.jactype == JacType.DIAG and other.jactype == JacType.DIAG:
-                res = self * other
-                return jacobian(res, JacType.DIAG)
-            # full * full
-            if self.jactype == JacType.FULL and other.jactype == JacType.FULL:
-                res = torch.matmul(self, other)
-                return jacobian(res, JacType.FULL)
-            # diag * full
-            if self.jactype == JacType.DIAG and other.jactype == JacType.FULL:
-                res = torch.matmul(torch.diag_embed(self), other)
-                return jacobian(res, JacType.FULL)
-            # full * diag
-            if self.jactype == JacType.FULL and other.jactype == JacType.DIAG:
-                res = torch.matmul(self, torch.diag_embed(other))
-                return jacobian(res, JacType.FULL)
-            if self.jactype == JacType.CONV:
-                # conv * conv
-                if other == JacType.CONV:
-                    res = self * other
-                    return jacobian(res, JacType.CONV)
-
-        raise ValueError("Unknown matrix multiplication of jacobian matrices")
-
-
-def jacobian(tensor, jactype):
-    """Initialize a jacobian tensor by a specified jacobian type"""
-    return Jacobian(tensor, jactype)
-
-
-class ActivationJacobian(ABC):
-    """Abstract base class for activation functions.
-
-    Any activation function subclassing this class will need to implement the
-    `_jacobian` method for computing their Jacobian.
-    """
-
-    def __abstract_init__(self, activation, *args, **kwargs):
-        activation.__init__(self, *args, **kwargs)
-        self._activation = activation
-
-    def forward(self, x: torch.Tensor, jacobian: bool = False):
-        val = self._activation.forward(self, x)
-
+    def forward(self, x, jacobian=False):
+        val = x
+        
         if jacobian:
-            J, _ = self._jacobian(x, val)
-            return val, J
-        else:
-            return val
+            xs = x.shape
+            jac = torch.eye(prod(xs[1:]), prod(xs[1:])).repeat(xs[0], 1, 1).reshape(xs[0], *xs[1:], *xs[1:])
+            return val, jac
+        return val
 
-    @abstractmethod
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
-        """Evaluate the Jacobian of an activation function.
-        The Jacobian is evaluated at x, where the function
-        attains value val."""
-        pass
+    def _jacobian_mult(self, x, val, jac_in):
+        return jac_in
 
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
-        """Multiply the Jacobian at x with M.
-        This can potentially be done more efficiently than
-        first computing the Jacobian, and then performing the
-        multiplication."""
-        jac = self._jacobian(x, val)  # (B)x(in) -- the current Jacobian;
-        return jac @ jac_in
+
+def identity(x):
+    m = Identity()
+    return m(x, jacobian=True)[1]
 
 
 class Sequential(nn.Sequential):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def forward(self, x: torch.Tensor, jacobian: bool = False):
-        xsh = x.shape
-        if len(xsh) == 1:
-            x = x.unsqueeze(0)
-
-        x = x.view(-1, xsh[-1])  # Nx(d)
-
+    def forward(self, x: Tensor, jacobian: Union[Tensor, bool] = False):
         if jacobian:
-            jac = None
-
-            for module in self._modules.values():
-                val = module(x)
-                if jac is None:
-                    jac = module._jacobian(x, val)
-                else:
-                    jac = module._jac_mul(x, val, jac)
-                x = val
-
-            x = x.view(xsh[:-1] + torch.Size([x.shape[-1]]))
-            if jac.jactype == JacType.DIAG:
-                jac = jac.view(xsh[:-1] + jac.shape[-1:])
-            else:
-                jac = jac.view(xsh[:-1] + jac.shape[-2:])
-
-            return x, jac
-
-        for module in self._modules.values():
-            x = module(x)
-        x = x.view(xsh[:-1] + torch.Size([x.shape[-1]]))
-        return x
-
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
-        _, J = self.forward(x, jacobian=True)
-        return J
-
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac: torch.Tensor) -> Jacobian:
+            j = identity(x) if (not isinstance(jacobian, Tensor) and jacobian) else jacobian
         for module in self._modules.values():
             val = module(x)
-            jac = module._jac_mul(x, val, jac)
+            if jacobian:
+                j = module._jacobian_mult(x, val, j)
             x = val
-        return jac
-
-    def inverse(self):
-        layers = [L.inverse() for L in reversed(self._modules.values())]
-        return Sequential(*layers)
-
-    def dimensions(self):
-        in_features, out_features = None, None
-        for module in self._modules.values():
-            if (
-                in_features is None
-                and hasattr(module, "__constants__")
-                and "in_features" in module.__constants__
-            ):
-                in_features = module.in_features
-            if hasattr(module, "__constants__") and "out_features" in module.__constants__:
-                out_features = module.out_features
-        return in_features, out_features
+        if jacobian:
+            return x, j
+        return x
 
 
-class Linear(nn.Linear):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True):
-        super().__init__(in_features, out_features, bias)
+class AbstractJacobian:
+    def _jacobian(self, x, val):
+        return self._jacobian_mult(x, val, identity(x))
 
+
+class AbstractActivationJacobian:
+    def _jacobian_mult(self, x, val, jac_in):
+        jac = self._jacobian(x, val)
+        n = jac_in.ndim - jac.ndim
+        return jac_in * jac.reshape(jac.shape + (1,)*n)
+
+
+class Linear(nn.Linear, AbstractJacobian):
     def forward(self, x: torch.Tensor, jacobian: bool = False):
         val = super().forward(x)
 
@@ -218,29 +67,193 @@ class Linear(nn.Linear):
             return val, jac
         return val
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
-        b_sz = x.size()[0]
-        jac = self.weight.unsqueeze(0).repeat(b_sz, 1, 1)
-        return jacobian(jac, JacType.FULL)
+    def _jacobian_mult(self, x, val, jac_in):
+        return F.linear(jac_in.movedim(1,-1), self.weight, bias=None).movedim(-1,1)
 
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
-        jac = self._jacobian(x, val)  # (batch)x(out)x(in)
-        return jac @ jac_in
 
-    def inverse(self):
-        inv = Linear(in_features=self.out_features, out_features=self.in_features, bias=self.bias is not None)
-        pinv = self.weight.data.pinverse()
-        inv.weight.data = nn.Parameter(pinv)
-        if self.bias is not None:
-            inv.bias = nn.Parameter(-pinv.mv(self.bias.data))
-        return inv
+class Sigmoid(nn.Sigmoid, AbstractActivationJacobian):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
+
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian(self, x, val):
+        jac = val * (1.0 - val)
+        return jac
+
+
+class Upsample(nn.Upsample, AbstractJacobian):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
+
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val  
+
+    def _jacobian_mult(self, x, val, jac_in):
+        xs = x.shape
+        vs = val.shape
+        if x.ndim == 3:
+            return F.interpolate(jac_in.movedim((1,2),(-2,-1)).reshape(-1, *xs[1:]), 
+                self.size, self.scale_factor, self.mode, self.align_corners
+            ).reshape(xs[0], *jac_in.shape[3:], *vs[1:]).movedim((-2, -1), (1, 2))
+        if x.ndim == 4:
+            return F.interpolate(jac_in.movedim((1,2,3),(-3,-2,-1)).reshape(-1, *xs[1:]), 
+                self.size, self.scale_factor, self.mode, self.align_corners
+            ).reshape(xs[0], *jac_in.shape[4:], *vs[1:]).movedim((-3, -2, -1), (1, 2, 3))
+        if x.ndim == 5:
+            return F.interpolate(jac_in.movedim((1,2,3,4),(-4,-3,-2,-1)).reshape(-1, *xs[1:]), 
+                self.size, self.scale_factor, self.mode, self.align_corners
+            ).reshape(xs[0], *jac_in.shape[5:], *vs[1:]).movedim((-4,-3,-2, -1), (1, 2, 3, 4))
+
+
+class Conv1d(nn.Conv1d, AbstractJacobian):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
+
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian_mult(self, x, val, jac_in):
+        b, c1, l1 = x.shape
+        c2, l2 = val.shape[1:]
+        return F.conv1d(jac_in.movedim((1, 2), (-2, -1)).reshape(-1, c1, l1), weight=self.weight, 
+            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
+        ).reshape(b, *jac_in.shape[3:], c2, l2).movedim((-2, -1), (1, 2))
+
+
+class ConvTranspose1d(nn.ConvTranspose1d, AbstractJacobian):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
+
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian_mult(self, x, val, jac_in):
+        b, c1, l1 = x.shape
+        c2, l2 = val.shape[1:]
+        return F.conv_transpose1d(jac_in.movedim((1, 2), (-2, -1)).reshape(-1, c1, l1), weight=self.weight, 
+            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
+            output_padding=self.output_padding
+        ).reshape(b, *jac_in.shape[3:], c2, l2).movedim((-2, -1), (1, 2))
+
+
+class Conv2d(nn.Conv2d, AbstractJacobian):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
+
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian_mult(self, x, val, jac_in):
+        b, c1, h1, w1 = x.shape
+        c2, h2, w2 = val.shape[1:]
+        return F.conv2d(jac_in.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, c1, h1, w1), weight=self.weight, 
+            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
+        ).reshape(b, *jac_in.shape[4:], c2, h2, w2).movedim((-3, -2, -1), (1, 2, 3))
+
+
+class ConvTranspose2d(nn.ConvTranspose2d, AbstractJacobian):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
+
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian_mult(self, x, val, jac_in):
+        b, c1, h1, w1 = x.shape
+        c2, h2, w2 = val.shape[1:]
+        return F.conv_transpose2d(jac_in.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, c1, h1, w1), weight=self.weight, 
+            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
+            output_padding=self.output_padding,
+        ).reshape(b, *jac_in.shape[4:], c2, h2, w2).movedim((-3, -2, -1), (1, 2, 3))
+
+
+class Conv3d(nn.Conv3d, AbstractJacobian):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
+
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian_mult(self, x, val, jac_in):
+        b, c1, d1, h1, w1 = x.shape
+        c2, d2, h2, w2 = val.shape[1:]
+        return F.conv3d(jac_in.movedim((1, 2, 3, 4), (-4, -3, -2, -1)).reshape(-1, c1, d1, h1, w1), weight=self.weight, 
+            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
+        ).reshape(b, *jac_in.shape[5:], c2, d2, h2, w2).movedim((-4, -3, -2, -1), (1, 2, 3, 4))
+
+
+class ConvTranspose3d(nn.ConvTranspose3d, AbstractJacobian):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
+
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian_mult(self, x, val, jac_in):
+        b, c1, d1, h1, w1 = x.shape
+        c2, d2, h2, w2 = val.shape[1:]
+        return F.conv_transpose3d(jac_in.movedim((1, 2, 3, 4), (-4, -3, -2, -1)).reshape(-1, c1, d1, h1, w1), weight=self.weight, 
+            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
+            output_padding=self.output_padding
+        ).reshape(b, *jac_in.shape[5:], c2, d2, h2, w2).movedim((-4, -3, -2, -1), (1, 2, 3, 4))
+
+
+class Reshape(nn.Module, AbstractJacobian):
+    def __init__(self, *dims):
+        super().__init__()
+        self.dims = dims
+
+    def forward(self, x: torch.Tensor, jacobian: bool = False) -> torch.Tensor:
+        val = x.reshape(x.shape[0], *self.dims)
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian_mult(self, x, val, jac_in):
+        return jac_in.reshape(jac_in.shape[0], *self.dims, *jac_in.shape[2:])
+
+
+class Flatten(nn.Module, AbstractJacobian):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x: torch.Tensor, jacobian: bool = False) -> torch.Tensor:
+        val = x.reshape(x.shape[0], -1)
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian_mult(self, x, val, jac_in):
+        if jac_in.ndim == 5:  # 1d conv
+            return jac_in.reshape(jac_in.shape[0], -1, *jac_in.shape[3:])
+        if jac_in.ndim == 7:  # 2d conv
+            return jac_in.reshape(jac_in.shape[0], -1, *jac_in.shape[4:])
+        if jac_in.ndim == 9:  # 3d conv
+            return jac_in.reshape(jac_in.shape[0], -1, *jac_in.shape[5:])
 
 
 class PosLinear(Linear):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def forward(self, x, jacobian: bool = False):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
         if self.bias is None:
             val = F.linear(x, F.softplus(self.weight))
         else:
@@ -251,44 +264,52 @@ class PosLinear(Linear):
             return val, jac
         return val
 
-    def _jacobian(self, x: torch.Tensor, val: torch.Tensor) -> Jacobian:
-        b_sz = x.shape[0]
-        jac = F.softplus(self.weight).unsqueeze(0).repeat(b_sz, 1, 1)
-        return jacobian(jac, JacType.FULL)
-
-    def _jac_mul(self, x: torch.Tensor, val: torch.Tensor, jac_in: torch.Tensor) -> Jacobian:
-        jac = self._jacobian(x, val)  # (batch)x(out)x(in)
-        return jac @ jac_in
+    def _jacobian_mult(self, x, val, jac_in):
+        return F.linear(jac_in.movedim(1,-1), F.softplus(self.weight), bias=None).movedim(-1,1)
 
 
-class ReLU(ActivationJacobian, nn.ReLU):
-    def __init__(self, *args, **kwargs):
-        ActivationJacobian.__abstract_init__(self, nn.ReLU, *args, **kwargs)
+class ReLU(nn.ReLU, AbstractActivationJacobian):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
 
-    def _jacobian(self, x, val) -> Jacobian:
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian(self, x, val):
         jac = (val > 0.0).type(val.dtype)
-        return jacobian(jac, JacType.DIAG)
+        return jac
 
 
-class ELU(ActivationJacobian, nn.ELU):
-    def __init__(self, *args, **kwargs):
-        ActivationJacobian.__abstract_init__(self, nn.ELU, *args, **kwargs)
+class ELU(nn.ELU, AbstractActivationJacobian):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
 
-    def _jacobian(self, x, val) -> Jacobian:
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian(self, x, val):
         jac = torch.ones_like(val)
-        jac[val < 0.0] = val[val < 0.0] + self.alpha
-        return jacobian(jac, JacType.DIAG)
+        jac[x <= 0.0] = val[x <= 0.0] + self.alpha
+        return jac
 
 
-class Hardshrink(ActivationJacobian, nn.Hardshrink):
-    def __init__(self, *args, **kwargs):
-        ActivationJacobian.__abstract_init__(self, nn.Hardshrink, *args, **kwargs)
+class Hardshrink(nn.Hardshrink, AbstractActivationJacobian):
+    def forward(self, x: torch.Tensor, jacobian: bool = False):
+        val = super().forward(x)
 
-    def _jacobian(self, x, val) -> Jacobian:
+        if jacobian:
+            jac = self._jacobian(x, val)
+            return val, jac
+        return val
+
+    def _jacobian(self, x, val):
         jac = torch.ones_like(val)
-        # J[(-self.lambd < x) & (x < self.lambd)] = 0.0
-        jac[val.abs() < 1e-3] = 0.0
-        return jacobian(jac, JacType.DIAG)
+        jac[-self.lambd < x < self.lambd] = 0.0
+        return jac
 
 
 class Hardtanh(ActivationJacobian, nn.Hardtanh):
@@ -309,15 +330,6 @@ class LeakyReLU(ActivationJacobian, nn.LeakyReLU):
     def _jacobian(self, x, val) -> Jacobian:
         jac = torch.ones_like(val)
         jac[val < 0.0] = self.negative_slope
-        return jacobian(jac, JacType.DIAG)
-
-
-class Sigmoid(ActivationJacobian, nn.Sigmoid):
-    def __init__(self, *args, **kwargs):
-        ActivationJacobian.__abstract_init__(self, nn.Sigmoid, *args, **kwargs)
-
-    def _jacobian(self, x, val) -> Jacobian:
-        jac = val * (1.0 - val)
         return jacobian(jac, JacType.DIAG)
 
 

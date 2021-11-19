@@ -99,7 +99,10 @@ class AE_mnist(nn.Module):
                                           lr=learning_rate)
         if device == "gpu":
             self.cuda()
-            self.device = torch.device('cuda')
+            self.device = torch.device('cuda:0')
+
+            self.encoder.to(self.device)
+            self.encoder.to(self.device)
         else:
             self.device = torch.device('cpu')
 

@@ -6,14 +6,16 @@ from torch import nn, Tensor
 
 from math import prod
 
+
 class Identity(nn.Module):
     """ Identity module that will return the same input as it receives. """
+
     def __init__(self):
         super().__init__()
 
     def forward(self, x: Tensor, jacobian: bool = False) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         val = x
-        
+
         if jacobian:
             xs = x.shape
             jac = torch.eye(prod(xs[1:]), prod(xs[1:])).repeat(xs[0], 1, 1).reshape(xs[0], *xs[1:], *xs[1:])
@@ -32,7 +34,10 @@ def identity(x: Tensor) -> Tensor:
 
 class Sequential(nn.Sequential):
     """ Subclass of sequential that also supports calculating the jacobian through an network """
-    def forward(self, x: Tensor, jacobian: Union[Tensor, bool] = False) -> Union[Tensor, Tuple[Tensor, Tensor]]:
+
+    def forward(
+        self, x: Tensor, jacobian: Union[Tensor, bool] = False
+    ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         if jacobian:
             j = identity(x) if (not isinstance(jacobian, Tensor) and jacobian) else jacobian
         for module in self._modules.values():
@@ -46,9 +51,10 @@ class Sequential(nn.Sequential):
 
 
 class AbstractJacobian:
-    """ Abstract class that will overwrite the default behaviour of the forward method such that it
-        is also possible to return the jacobian
+    """Abstract class that will overwrite the default behaviour of the forward method such that it
+    is also possible to return the jacobian
     """
+
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         return self._jacobian_mult(x, val, identity(x))
 
@@ -62,7 +68,7 @@ class AbstractJacobian:
 
 class Linear(AbstractJacobian, nn.Linear):
     def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
-        return F.linear(jac_in.movedim(1,-1), self.weight, bias=None).movedim(-1,1)
+        return F.linear(jac_in.movedim(1, -1), self.weight, bias=None).movedim(-1, 1)
 
 
 class PosLinear(AbstractJacobian, nn.Linear):
@@ -74,7 +80,7 @@ class PosLinear(AbstractJacobian, nn.Linear):
         return val
 
     def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
-        return F.linear(jac_in.movedim(1,-1), F.softplus(self.weight), bias=None).movedim(-1,1)
+        return F.linear(jac_in.movedim(1, -1), F.softplus(self.weight), bias=None).movedim(-1, 1)
 
 
 class Upsample(AbstractJacobian, nn.Upsample):
@@ -82,74 +88,158 @@ class Upsample(AbstractJacobian, nn.Upsample):
         xs = x.shape
         vs = val.shape
         if x.ndim == 3:
-            return F.interpolate(jac_in.movedim((1,2),(-2,-1)).reshape(-1, *xs[1:]), 
-                self.size, self.scale_factor, self.mode, self.align_corners
-            ).reshape(xs[0], *jac_in.shape[3:], *vs[1:]).movedim((-2, -1), (1, 2))
+            return (
+                F.interpolate(
+                    jac_in.movedim((1, 2), (-2, -1)).reshape(-1, *xs[1:]),
+                    self.size,
+                    self.scale_factor,
+                    self.mode,
+                    self.align_corners,
+                )
+                .reshape(xs[0], *jac_in.shape[3:], *vs[1:])
+                .movedim((-2, -1), (1, 2))
+            )
         if x.ndim == 4:
-            return F.interpolate(jac_in.movedim((1,2,3),(-3,-2,-1)).reshape(-1, *xs[1:]), 
-                self.size, self.scale_factor, self.mode, self.align_corners
-            ).reshape(xs[0], *jac_in.shape[4:], *vs[1:]).movedim((-3, -2, -1), (1, 2, 3))
+            return (
+                F.interpolate(
+                    jac_in.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, *xs[1:]),
+                    self.size,
+                    self.scale_factor,
+                    self.mode,
+                    self.align_corners,
+                )
+                .reshape(xs[0], *jac_in.shape[4:], *vs[1:])
+                .movedim((-3, -2, -1), (1, 2, 3))
+            )
         if x.ndim == 5:
-            return F.interpolate(jac_in.movedim((1,2,3,4),(-4,-3,-2,-1)).reshape(-1, *xs[1:]), 
-                self.size, self.scale_factor, self.mode, self.align_corners
-            ).reshape(xs[0], *jac_in.shape[5:], *vs[1:]).movedim((-4,-3,-2, -1), (1, 2, 3, 4))
+            return (
+                F.interpolate(
+                    jac_in.movedim((1, 2, 3, 4), (-4, -3, -2, -1)).reshape(-1, *xs[1:]),
+                    self.size,
+                    self.scale_factor,
+                    self.mode,
+                    self.align_corners,
+                )
+                .reshape(xs[0], *jac_in.shape[5:], *vs[1:])
+                .movedim((-4, -3, -2, -1), (1, 2, 3, 4))
+            )
 
 
 class Conv1d(AbstractJacobian, nn.Conv1d):
     def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
         b, c1, l1 = x.shape
         c2, l2 = val.shape[1:]
-        return F.conv1d(jac_in.movedim((1, 2), (-2, -1)).reshape(-1, c1, l1), weight=self.weight, 
-            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
-        ).reshape(b, *jac_in.shape[3:], c2, l2).movedim((-2, -1), (1, 2))
+        return (
+            F.conv1d(
+                jac_in.movedim((1, 2), (-2, -1)).reshape(-1, c1, l1),
+                weight=self.weight,
+                bias=None,
+                stride=self.stride,
+                padding=self.padding,
+                dilation=self.dilation,
+                groups=self.groups,
+            )
+            .reshape(b, *jac_in.shape[3:], c2, l2)
+            .movedim((-2, -1), (1, 2))
+        )
 
 
 class ConvTranspose1d(AbstractJacobian, nn.ConvTranspose1d):
     def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
         b, c1, l1 = x.shape
         c2, l2 = val.shape[1:]
-        return F.conv_transpose1d(jac_in.movedim((1, 2), (-2, -1)).reshape(-1, c1, l1), weight=self.weight, 
-            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
-            output_padding=self.output_padding
-        ).reshape(b, *jac_in.shape[3:], c2, l2).movedim((-2, -1), (1, 2))
+        return (
+            F.conv_transpose1d(
+                jac_in.movedim((1, 2), (-2, -1)).reshape(-1, c1, l1),
+                weight=self.weight,
+                bias=None,
+                stride=self.stride,
+                padding=self.padding,
+                dilation=self.dilation,
+                groups=self.groups,
+                output_padding=self.output_padding,
+            )
+            .reshape(b, *jac_in.shape[3:], c2, l2)
+            .movedim((-2, -1), (1, 2))
+        )
 
 
 class Conv2d(AbstractJacobian, nn.Conv2d):
     def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
         b, c1, h1, w1 = x.shape
         c2, h2, w2 = val.shape[1:]
-        return F.conv2d(jac_in.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, c1, h1, w1), weight=self.weight, 
-            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
-        ).reshape(b, *jac_in.shape[4:], c2, h2, w2).movedim((-3, -2, -1), (1, 2, 3))
+        return (
+            F.conv2d(
+                jac_in.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, c1, h1, w1),
+                weight=self.weight,
+                bias=None,
+                stride=self.stride,
+                padding=self.padding,
+                dilation=self.dilation,
+                groups=self.groups,
+            )
+            .reshape(b, *jac_in.shape[4:], c2, h2, w2)
+            .movedim((-3, -2, -1), (1, 2, 3))
+        )
 
 
 class ConvTranspose2d(AbstractJacobian, nn.ConvTranspose2d):
     def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
         b, c1, h1, w1 = x.shape
         c2, h2, w2 = val.shape[1:]
-        return F.conv_transpose2d(jac_in.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, c1, h1, w1), weight=self.weight, 
-            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
-            output_padding=self.output_padding,
-        ).reshape(b, *jac_in.shape[4:], c2, h2, w2).movedim((-3, -2, -1), (1, 2, 3))
+        return (
+            F.conv_transpose2d(
+                jac_in.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, c1, h1, w1),
+                weight=self.weight,
+                bias=None,
+                stride=self.stride,
+                padding=self.padding,
+                dilation=self.dilation,
+                groups=self.groups,
+                output_padding=self.output_padding,
+            )
+            .reshape(b, *jac_in.shape[4:], c2, h2, w2)
+            .movedim((-3, -2, -1), (1, 2, 3))
+        )
 
 
 class Conv3d(AbstractJacobian, nn.Conv3d):
     def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
         b, c1, d1, h1, w1 = x.shape
         c2, d2, h2, w2 = val.shape[1:]
-        return F.conv3d(jac_in.movedim((1, 2, 3, 4), (-4, -3, -2, -1)).reshape(-1, c1, d1, h1, w1), weight=self.weight, 
-            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
-        ).reshape(b, *jac_in.shape[5:], c2, d2, h2, w2).movedim((-4, -3, -2, -1), (1, 2, 3, 4))
+        return (
+            F.conv3d(
+                jac_in.movedim((1, 2, 3, 4), (-4, -3, -2, -1)).reshape(-1, c1, d1, h1, w1),
+                weight=self.weight,
+                bias=None,
+                stride=self.stride,
+                padding=self.padding,
+                dilation=self.dilation,
+                groups=self.groups,
+            )
+            .reshape(b, *jac_in.shape[5:], c2, d2, h2, w2)
+            .movedim((-4, -3, -2, -1), (1, 2, 3, 4))
+        )
 
 
 class ConvTranspose3d(AbstractJacobian, nn.ConvTranspose3d):
     def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
         b, c1, d1, h1, w1 = x.shape
         c2, d2, h2, w2 = val.shape[1:]
-        return F.conv_transpose3d(jac_in.movedim((1, 2, 3, 4), (-4, -3, -2, -1)).reshape(-1, c1, d1, h1, w1), weight=self.weight, 
-            bias=None, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups,
-            output_padding=self.output_padding
-        ).reshape(b, *jac_in.shape[5:], c2, d2, h2, w2).movedim((-4, -3, -2, -1), (1, 2, 3, 4))
+        return (
+            F.conv_transpose3d(
+                jac_in.movedim((1, 2, 3, 4), (-4, -3, -2, -1)).reshape(-1, c1, d1, h1, w1),
+                weight=self.weight,
+                bias=None,
+                stride=self.stride,
+                padding=self.padding,
+                dilation=self.dilation,
+                groups=self.groups,
+                output_padding=self.output_padding,
+            )
+            .reshape(b, *jac_in.shape[5:], c2, d2, h2, w2)
+            .movedim((-4, -3, -2, -1), (1, 2, 3, 4))
+        )
 
 
 class Reshape(AbstractJacobian, nn.Module):
@@ -186,14 +276,14 @@ class AbstractActivationJacobian:
     def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
         jac = self._jacobian(x, val)
         n = jac_in.ndim - jac.ndim
-        return jac_in * jac.reshape(jac.shape + (1,)*n)
+        return jac_in * jac.reshape(jac.shape + (1,) * n)
 
     def __call__(self, x: Tensor, jacobian: bool = False) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         val = self._call_impl(x)
         if jacobian:
             jac = self._jacobian(x, val)
             return val, jac
-        return val     
+        return val
 
 
 class Sigmoid(AbstractActivationJacobian, nn.Sigmoid):

@@ -23,57 +23,22 @@ def _compare_jacobian(f, x):
     return res
 
 
-"""
-_models = [
-    nnj.Sequential(
-        nnj.Linear(_in_features, 2), nnj.Softplus(beta=100, threshold=5), nnj.Linear(2, 4), nnj.Tanh()
-    ),
-    nnj.Sequential(nnj.RBF(_in_features, 30), nnj.Linear(30, 2)),
-    nnj.Sequential(nnj.Linear(_in_features, 4), nnj.Norm2()),
-    nnj.Sequential(nnj.Linear(_in_features, 50), nnj.ReLU(), nnj.Linear(50, 100), nnj.Softplus()),
-    nnj.Sequential(nnj.Linear(_in_features, 256)),
-    nnj.Sequential(nnj.Softplus(), nnj.Linear(_in_features, 3), nnj.Softplus()),
-    nnj.Sequential(nnj.Softplus(), nnj.Sigmoid(), nnj.Linear(_in_features, 3)),
-    nnj.Sequential(nnj.Softplus(), nnj.Sigmoid()),
-    nnj.Sequential(nnj.Linear(_in_features, 3), nnj.OneMinusX()),
-    nnj.Sequential(
-        nnj.PosLinear(_in_features, 2), nnj.Softplus(beta=100, threshold=5), nnj.PosLinear(2, 4), nnj.Tanh()
-    ),
-    nnj.Sequential(nnj.PosLinear(_in_features, 5), nnj.Reciprocal(b=1.0)),
-    nnj.Sequential(nnj.ReLU(), nnj.ELU(), nnj.LeakyReLU(), nnj.Sigmoid(), nnj.Softplus(), nnj.Tanh()),
-    nnj.Sequential(nnj.ReLU()),
-    nnj.Sequential(nnj.ELU()),
-    nnj.Sequential(nnj.LeakyReLU()),
-    nnj.Sequential(nnj.Sigmoid()),
-    nnj.Sequential(nnj.Softplus()),
-    nnj.Sequential(nnj.Tanh()),
-    nnj.Sequential(nnj.Hardshrink()),
-    nnj.Sequential(nnj.Hardtanh()),
-    nnj.Sequential(nnj.ResidualBlock(nnj.Linear(_in_features, 50), nnj.ReLU())),
-    nnj.Sequential(nnj.BatchNorm1d(_in_features)),
-    nnj.Sequential(
-        nnj.BatchNorm1d(_in_features),
-        nnj.ResidualBlock(nnj.Linear(_in_features, 25), nnj.Softplus()),
-        nnj.BatchNorm1d(25),
-        nnj.ResidualBlock(nnj.Linear(25, 25), nnj.Softplus()),
-    ),
-]
-"""
-
-
-
 @pytest.mark.parametrize("model, input", 
     [
-        (nnj.Sequential(nnj.Linear(_features, 2)), _linear_input),
-        (nnj.Sequential(nnj.Linear(_features, 2), nnj.Sigmoid()), _linear_input),
+        (nnj.Sequential(nnj.Identity(), nnj.Identity()), _linear_input),
+        (nnj.Linear(_features, 2), _linear_input),
+        (nnj.PosLinear(_features, 2), _linear_input),
+        (nnj.Sequential(nnj.Linear(_features, 2), nnj.Sigmoid(), nnj.ArcTanh()), _linear_input),
         (nnj.Sequential(nnj.Linear(_features, 5), nnj.Sigmoid(), nnj.Linear(5, 2)), _linear_input),
         (nnj.Sequential(
             nnj.Linear(_features, 2), nnj.Softplus(beta=100, threshold=5), nnj.Linear(2, 4), nnj.Tanh()
         ), _linear_input),
-        (nnj.Sequential(nnj.Linear(_features, 2), nnj.Sigmoid(), nnj.ReLU()), _linear_input),
-        (nnj.Sequential(nnj.Conv1d(_features, 2, 5)), _1d_conv_input),
-        (nnj.Sequential(nnj.Conv2d(_features, 2, 5)), _2d_conv_input),
-        (nnj.Sequential(nnj.Conv3d(_features, 2, 5)), _3d_conv_input),
+        (nnj.Sequential(
+            nnj.ELU(), nnj.Linear(_features, 2), nnj.Sigmoid(), nnj.ReLU(), nnj.Hardshrink(), nnj.LeakyReLU()
+        ), _linear_input),
+        (nnj.Sequential(nnj.Conv1d(_features, 2, 5), nnj.ConvTranspose1d(2, _features, 5)), _1d_conv_input),
+        (nnj.Sequential(nnj.Conv2d(_features, 2, 5), nnj.ConvTranspose2d(2, _features, 5)), _2d_conv_input),
+        (nnj.Sequential(nnj.Conv3d(_features, 2, 5), nnj.ConvTranspose3d(2, _features, 5)), _3d_conv_input),
         (nnj.Sequential(
             nnj.Linear(_features, 8), nnj.Sigmoid(), nnj.Reshape(2, 4), nnj.Conv1d(2, 1, 2),
         ),_linear_input),
@@ -91,7 +56,10 @@ _models = [
         ),_2d_conv_input),
         (nnj.Sequential(
             nnj.Conv3d(_features, 2, 3), nnj.Flatten(), nnj.Linear(8*8*8*2, 5), nnj.ReLU(),
-        ),_3d_conv_input)
+        ),_3d_conv_input),
+        (nnj.Sequential(
+            nnj.Conv2d(_features, 2, 3), nnj.Hardtanh(), nnj.Upsample(scale_factor=2)
+        ), _2d_conv_input)
     ]
 )
 class TestJacobian:

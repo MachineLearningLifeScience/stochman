@@ -73,10 +73,8 @@ class Linear(AbstractJacobian, nn.Linear):
 
 class PosLinear(AbstractJacobian, nn.Linear):
     def forward(self, x: Tensor):
-        if self.bias is None:
-            val = F.linear(x, F.softplus(self.weight))
-        else:
-            val = F.linear(x, F.softplus(self.weight), F.softplus(self.bias))
+        bias = F.softplus(self.bias) if self.bias is not None else self.bias
+        val = F.linear(x, F.softplus(self.weight), bias)
         return val
 
     def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
@@ -87,42 +85,21 @@ class Upsample(AbstractJacobian, nn.Upsample):
     def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
         xs = x.shape
         vs = val.shape
-        if x.ndim == 3:
-            return (
-                F.interpolate(
-                    jac_in.movedim((1, 2), (-2, -1)).reshape(-1, *xs[1:]),
-                    self.size,
-                    self.scale_factor,
-                    self.mode,
-                    self.align_corners,
-                )
-                .reshape(xs[0], *jac_in.shape[3:], *vs[1:])
-                .movedim((-2, -1), (1, 2))
+
+        dims1 = tuple(range(1, x.ndim))
+        dims2 = tuple(range(-x.ndim + 1, 0))
+
+        return (
+            F.interpolate(
+                jac_in.movedim(dims1, dims2).reshape(-1, *xs[1:]),
+                self.size,
+                self.scale_factor,
+                self.mode,
+                self.align_corners,
             )
-        if x.ndim == 4:
-            return (
-                F.interpolate(
-                    jac_in.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, *xs[1:]),
-                    self.size,
-                    self.scale_factor,
-                    self.mode,
-                    self.align_corners,
-                )
-                .reshape(xs[0], *jac_in.shape[4:], *vs[1:])
-                .movedim((-3, -2, -1), (1, 2, 3))
-            )
-        if x.ndim == 5:
-            return (
-                F.interpolate(
-                    jac_in.movedim((1, 2, 3, 4), (-4, -3, -2, -1)).reshape(-1, *xs[1:]),
-                    self.size,
-                    self.scale_factor,
-                    self.mode,
-                    self.align_corners,
-                )
-                .reshape(xs[0], *jac_in.shape[5:], *vs[1:])
-                .movedim((-4, -3, -2, -1), (1, 2, 3, 4))
-            )
+            .reshape(xs[0], *jac_in.shape[x.ndim :], *vs[1:])
+            .movedim(dims2, dims1)
+        )
 
 
 class Conv1d(AbstractJacobian, nn.Conv1d):
@@ -308,7 +285,7 @@ class ELU(AbstractActivationJacobian, nn.ELU):
 class Hardshrink(AbstractActivationJacobian, nn.Hardshrink):
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = torch.ones_like(val)
-        jac[-self.lambd < x < self.lambd] = 0.0
+        jac[torch.logical_and(-self.lambd < x, x < self.lambd)] = 0.0
         return jac
 
 

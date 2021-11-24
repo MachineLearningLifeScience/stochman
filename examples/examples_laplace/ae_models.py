@@ -64,9 +64,9 @@ class Encoder_mnist(nn.Module):
 
         self.encoder = nn.Sequential(
             nn.Linear(784, 512),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(512, 256),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(256, latent_size)
         )
         
@@ -80,11 +80,11 @@ class Decoder_mnist(nn.Module):
         self.latent_size = latent_size
 
         self.decoder = nn.Sequential(
-            nn.Linear(latent_size, 512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, 784)
+            nn.Linear(latent_size, 256),
+            nn.Tanh(),
+            nn.Linear(256, 512),
+            nn.Tanh(),
+            nn.Linear(512, 784)
         )
     
     def forward(self, x):

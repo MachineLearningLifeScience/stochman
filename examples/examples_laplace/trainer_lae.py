@@ -43,7 +43,11 @@ def test_lae(dataset, batch_size=1):
         X = X.view(X.size(0), -1).to(device)
         with torch.inference_mode():
             z += [encoder(X)]
-            mu, var = la(z[-1])
+
+            # pred_type : {glm, nn}
+            # link_approx only relevant for classification
+            pred_type =  "glm"
+            mu, var = la(z[-1], pred_type = pred_type)
 
             x += [X.cpu()]
             labels += [y]
@@ -117,8 +121,8 @@ def test_lae(dataset, batch_size=1):
             plt.imshow(mu_rec[i].reshape(28,28))
 
             plt.subplot(1,3,3)
-            N = 784
-            sigma = sigma_rec[i][np.arange(N), np.arange(N)]
+            N = 784 
+            sigma = sigma_rec[i] if pred_type == "nn" else sigma_rec[i][np.arange(N), np.arange(N)]
             plt.imshow(sigma.reshape(28,28))
 
             plt.savefig(f"figures/{dataset}/recon_{i}.png")
@@ -157,26 +161,32 @@ def train_lae(dataset="mnist", n_epochs=50, batch_size=32):
     
     # Fitting
     la.fit(z_loader)
-    log_prior, log_sigma = torch.ones(1, requires_grad=True, device=device), torch.ones(1, requires_grad=True, device=device)
-    hyper_optimizer = torch.optim.Adam([log_prior, log_sigma], lr=1e-2)
-    for i in range(n_epochs):
-        hyper_optimizer.zero_grad()
-        neg_marglik = - la.log_marginal_likelihood(log_prior.exp(), log_sigma.exp())
-        neg_marglik.backward()
-        hyper_optimizer.step()
+
+    la.optimize_prior_precision()
+    # log_prior, log_sigma = torch.ones(1, requires_grad=True, device=device), torch.ones(1, requires_grad=True, device=device)
+    # hyper_optimizer = torch.optim.Adam([log_prior, log_sigma], lr=1e-2)
+    # for i in range(n_epochs):
+    #    hyper_optimizer.zero_grad()
+    #    neg_marglik = - la.log_marginal_likelihood(log_prior.exp(), log_sigma.exp())
+    #    neg_marglik.backward()
+    #    hyper_optimizer.step()
 
     # save weights
     save_laplace(la, f"weights/{dataset}/laplace_decoder.pkl")
 
 if __name__ == "__main__":
 
-    train = True
-    dataset = "swissrole"
+    train = False
+    dataset = "mnist"
+    batch_size = 1
 
     # train or load laplace auto encoder
     if train:
         print("==> train lae")
-        train_lae(dataset)
+        train_lae(
+            dataset=dataset, 
+            batch_size=batch_size
+        )
 
     # evaluate laplace auto encoder
     print("==> evaluate lae")

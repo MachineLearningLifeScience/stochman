@@ -18,7 +18,7 @@ class Identity(nn.Module):
 
         if jacobian:
             xs = x.shape
-            jac = torch.eye(prod(xs[1:]), prod(xs[1:])).repeat(xs[0], 1, 1).reshape(xs[0], *xs[1:], *xs[1:])
+            jac = torch.eye(prod(xs[1:]), prod(xs[1:]), dtype=x.dtype).repeat(xs[0], 1, 1).reshape(xs[0], *xs[1:], *xs[1:])
             return val, jac
         return val
 

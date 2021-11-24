@@ -1,7 +1,7 @@
 import numpy
 import pytest
 import torch
-
+from copy import deepcopy
 from stochman import nnj
 
 _batch_size = 2
@@ -63,13 +63,18 @@ def _compare_jacobian(f, x):
     ]
 )
 class TestJacobian:
-    def test_jacobians(self, model, input):
+    @pytest.mark.parametrize("dtype", [torch.float, torch.double])
+    def test_jacobians(self, model, input, dtype):
         """Test that the analytical jacobian of the model is consistent with finite
         order approximation
         """
+        model=deepcopy(model).to(dtype)
+        input=deepcopy(input).to(dtype)
         _, jac = model(input, jacobian=True)
         jacnum = _compare_jacobian(model, input)
         assert torch.isclose(jac, jacnum, atol=1e-7).all(), "jacobians did not match"
+
+
 
     @pytest.mark.parametrize("return_jac", [True, False])
     def test_jac_return(self, model, input, return_jac):

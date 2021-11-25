@@ -200,7 +200,9 @@ class DiscreteCurve(BasicCurve):
             (torch.floor(tt * num_edges).clamp(min=0, max=num_edges - 1).long())  # Bx|t|
             .unsqueeze(2)
             .repeat(1, 1, D)
-        ).to(self.device)  # Bx|t|xD, this assumes that nodes are equi-distant
+        ).to(
+            self.device
+        )  # Bx|t|xD, this assumes that nodes are equi-distant
         result = torch.gather(a, 1, idx) * tt.unsqueeze(2) + torch.gather(b, 1, idx)  # Bx|t|xD
         if B == 1:
             result = result.squeeze(0)  # |t|xD

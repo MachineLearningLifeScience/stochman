@@ -1,7 +1,10 @@
+from copy import deepcopy
+from typing import Callable
+
 import numpy
 import pytest
 import torch
-from copy import deepcopy
+
 from stochman import nnj
 
 _batch_size = 2
@@ -14,53 +17,105 @@ _2d_conv_input = torch.randn(_batch_size, _features, _dims, _dims)
 _3d_conv_input = torch.randn(_batch_size, _features, _dims, _dims, _dims)
 
 
-def _compare_jacobian(f, x):
+def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
+    """ Use pytorch build-in jacobian function to compare for correctness of computations"""
     out = f(x)
-    output = torch.autograd.functional.jacobian(f, x)   
+    output = torch.autograd.functional.jacobian(f, x)
     m = out.ndim
-    output = output.movedim(m,1)
-    res = torch.stack([output[i,i] for i in range(_batch_size)], dim=0)
+    output = output.movedim(m, 1)
+    res = torch.stack([output[i, i] for i in range(_batch_size)], dim=0)
     return res
 
 
-@pytest.mark.parametrize("model, input", 
+@pytest.mark.parametrize(
+    "model, input",
     [
         (nnj.Sequential(nnj.Identity(), nnj.Identity()), _linear_input),
         (nnj.Linear(_features, 2), _linear_input),
-        (nnj.PosLinear(_features, 2), _linear_input),
+        (nnj.Sequential(nnj.PosLinear(_features, 2), nnj.Reciprocal()), _linear_input),
         (nnj.Sequential(nnj.Linear(_features, 2), nnj.Sigmoid(), nnj.ArcTanh()), _linear_input),
         (nnj.Sequential(nnj.Linear(_features, 5), nnj.Sigmoid(), nnj.Linear(5, 2)), _linear_input),
-        (nnj.Sequential(
-            nnj.Linear(_features, 2), nnj.Softplus(beta=100, threshold=5), nnj.Linear(2, 4), nnj.Tanh()
-        ), _linear_input),
-        (nnj.Sequential(
-            nnj.ELU(), nnj.Linear(_features, 2), nnj.Sigmoid(), nnj.ReLU(), nnj.Hardshrink(), nnj.LeakyReLU()
-        ), _linear_input),
+        (
+            nnj.Sequential(
+                nnj.Linear(_features, 2), nnj.Softplus(beta=100, threshold=5), nnj.Linear(2, 4), nnj.Tanh()
+            ),
+            _linear_input,
+        ),
+        (
+            nnj.Sequential(
+                nnj.ELU(),
+                nnj.Linear(_features, 2),
+                nnj.Sigmoid(),
+                nnj.ReLU(),
+                nnj.Sqrt(),
+                nnj.Hardshrink(),
+                nnj.LeakyReLU(),
+            ),
+            _linear_input,
+        ),
+        (nnj.Sequential(nnj.Linear(_features, 2), nnj.OneMinusX()), _linear_input),
         (nnj.Sequential(nnj.Conv1d(_features, 2, 5), nnj.ConvTranspose1d(2, _features, 5)), _1d_conv_input),
         (nnj.Sequential(nnj.Conv2d(_features, 2, 5), nnj.ConvTranspose2d(2, _features, 5)), _2d_conv_input),
         (nnj.Sequential(nnj.Conv3d(_features, 2, 5), nnj.ConvTranspose3d(2, _features, 5)), _3d_conv_input),
-        (nnj.Sequential(
-            nnj.Linear(_features, 8), nnj.Sigmoid(), nnj.Reshape(2, 4), nnj.Conv1d(2, 1, 2),
-        ),_linear_input),
-        (nnj.Sequential(
-            nnj.Linear(_features, 32), nnj.Sigmoid(), nnj.Reshape(2, 4, 4), nnj.Conv2d(2, 1, 2),
-        ),_linear_input),
-        (nnj.Sequential(
-            nnj.Linear(_features, 128), nnj.Sigmoid(), nnj.Reshape(2, 4, 4, 4), nnj.Conv3d(2, 1, 2),
-        ),_linear_input),
-        (nnj.Sequential(
-            nnj.Conv1d(_features, 2, 3), nnj.Flatten(), nnj.Linear(8*2, 5), nnj.ReLU(),
-        ),_1d_conv_input),
-        (nnj.Sequential(
-            nnj.Conv2d(_features, 2, 3), nnj.Flatten(), nnj.Linear(8*8*2, 5), nnj.ReLU(),
-        ),_2d_conv_input),
-        (nnj.Sequential(
-            nnj.Conv3d(_features, 2, 3), nnj.Flatten(), nnj.Linear(8*8*8*2, 5), nnj.ReLU(),
-        ),_3d_conv_input),
-        (nnj.Sequential(
-            nnj.Conv2d(_features, 2, 3), nnj.Hardtanh(), nnj.Upsample(scale_factor=2)
-        ), _2d_conv_input)
-    ]
+        (
+            nnj.Sequential(
+                nnj.Linear(_features, 8),
+                nnj.Sigmoid(),
+                nnj.Reshape(2, 4),
+                nnj.Conv1d(2, 1, 2),
+            ),
+            _linear_input,
+        ),
+        (
+            nnj.Sequential(
+                nnj.Linear(_features, 32),
+                nnj.Sigmoid(),
+                nnj.Reshape(2, 4, 4),
+                nnj.Conv2d(2, 1, 2),
+            ),
+            _linear_input,
+        ),
+        (
+            nnj.Sequential(
+                nnj.Linear(_features, 128),
+                nnj.Sigmoid(),
+                nnj.Reshape(2, 4, 4, 4),
+                nnj.Conv3d(2, 1, 2),
+            ),
+            _linear_input,
+        ),
+        (
+            nnj.Sequential(
+                nnj.Conv1d(_features, 2, 3),
+                nnj.Flatten(),
+                nnj.Linear(8 * 2, 5),
+                nnj.ReLU(),
+            ),
+            _1d_conv_input,
+        ),
+        (
+            nnj.Sequential(
+                nnj.Conv2d(_features, 2, 3),
+                nnj.Flatten(),
+                nnj.Linear(8 * 8 * 2, 5),
+                nnj.ReLU(),
+            ),
+            _2d_conv_input,
+        ),
+        (
+            nnj.Sequential(
+                nnj.Conv3d(_features, 2, 3),
+                nnj.Flatten(),
+                nnj.Linear(8 * 8 * 8 * 2, 5),
+                nnj.ReLU(),
+            ),
+            _3d_conv_input,
+        ),
+        (
+            nnj.Sequential(nnj.Conv2d(_features, 2, 3), nnj.Hardtanh(), nnj.Upsample(scale_factor=2)),
+            _2d_conv_input,
+        ),
+    ],
 )
 class TestJacobian:
     @pytest.mark.parametrize("dtype", [torch.float, torch.double])
@@ -68,13 +123,11 @@ class TestJacobian:
         """Test that the analytical jacobian of the model is consistent with finite
         order approximation
         """
-        model=deepcopy(model).to(dtype)
-        input=deepcopy(input).to(dtype)
+        model = deepcopy(model).to(dtype)
+        input = deepcopy(input).to(dtype)
         _, jac = model(input, jacobian=True)
         jacnum = _compare_jacobian(model, input)
         assert torch.isclose(jac, jacnum, atol=1e-7).all(), "jacobians did not match"
-
-
 
     @pytest.mark.parametrize("return_jac", [True, False])
     def test_jac_return(self, model, input, return_jac):
@@ -82,7 +135,8 @@ class TestJacobian:
         output = model(input, jacobian=return_jac)
         if return_jac:
             assert len(output) == 2, "expected two outputs when jacobian=True"
-            assert all(isinstance(o, torch.Tensor) for o in output), "expected all outputs to be torch tensors"
+            assert all(
+                isinstance(o, torch.Tensor) for o in output
+            ), "expected all outputs to be torch tensors"
         else:
             assert isinstance(output, torch.Tensor)
-

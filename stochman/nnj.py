@@ -1,10 +1,9 @@
+from math import prod
 from typing import Optional, Tuple, Union
 
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
-
-from math import prod
 
 
 class Identity(nn.Module):
@@ -18,7 +17,11 @@ class Identity(nn.Module):
 
         if jacobian:
             xs = x.shape
-            jac = torch.eye(prod(xs[1:]), prod(xs[1:]), dtype=x.dtype).repeat(xs[0], 1, 1).reshape(xs[0], *xs[1:], *xs[1:])
+            jac = (
+                torch.eye(prod(xs[1:]), prod(xs[1:]), dtype=x.dtype)
+                .repeat(xs[0], 1, 1)
+                .reshape(xs[0], *xs[1:], *xs[1:])
+            )
             return val, jac
         return val
 
@@ -366,5 +369,5 @@ class Sqrt(AbstractActivationJacobian, nn.Module):
         return val
 
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
-        jac = -0.5 / val
+        jac = 0.5 / val
         return jac

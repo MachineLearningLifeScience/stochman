@@ -10,7 +10,7 @@ class TestCurves:
     @pytest.mark.parametrize("batch_dim", [1, 5])
     @pytest.mark.parametrize("device", ["cpu", "cuda:0"])
     def test_curve_evaluation(self, curve_class, requires_grad, batch_dim, device):
-        if not torch.cuda.is_available() and device == "cuda":
+        if not torch.cuda.is_available() and device == "cuda:0":
             pytest.skip("test requires cuda")
 
         dim = 2
@@ -92,3 +92,23 @@ class TestCurves:
         elif curve_class == curves.CubicSpline:
             new_c = c.todiscrete()
             assert isinstance(new_c, curves.DiscreteCurve)
+
+    def test_euclidean_length(self, curve_class):
+        begin = torch.zeros(1, 2).float()
+        end = torch.ones(1, 2).float()
+        c = curve_class(begin, end, 20)
+        el = c.euclidean_length()
+        assert torch.isclose(el, torch.tensor([2.0]).sqrt())
+
+    def test_constant_speed(self, curve_class):
+        batch_size = 5
+        dim = 2
+        timesteps = 50
+        begin = torch.randn(batch_size, dim)
+        end = torch.randn(batch_size, dim)
+        c = curve_class(begin, end, 20)
+        new_t, Ct = c.constant_speed(t=torch.linspace(0, 1, timesteps))
+        assert isinstance(new_t, torch.Tensor)
+        assert isinstance(Ct, torch.Tensor)
+        assert new_t.shape == (batch_size, timesteps)
+        assert Ct.shape == (batch_size, timesteps, dim)

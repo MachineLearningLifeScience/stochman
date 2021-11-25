@@ -11,6 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 
+
 def get_encoder(dataset, latent_size=2):
 
     if dataset == "mnist":
@@ -22,6 +23,7 @@ def get_encoder(dataset, latent_size=2):
 
     return encoder
 
+
 def get_decoder(dataset, latent_size=2):
 
     if dataset == "mnist":
@@ -32,6 +34,7 @@ def get_decoder(dataset, latent_size=2):
         raise NotImplemplenetError
 
     return decoder
+
 
 class Encoder_swissrole(nn.Module):
     def __init__(self, latent_size):
@@ -47,7 +50,7 @@ class Encoder_swissrole(nn.Module):
 
 
 class Decoder_swissrole(nn.Module):
-    def __init__(self, latent_size, device="cpu", learning_rate=1e-4):
+    def __init__(self, latent_size):
         super(Decoder_swissrole, self).__init__()
         self.latent_size = latent_size
         self.decoder = nn.Sequential(nn.Linear(latent_size, 50),

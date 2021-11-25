@@ -10,6 +10,9 @@ if __name__ == "__main__":
     print("==> train ae")
     train_ae(dataset)
 
+    print("==> test ae")
+    test_ae(dataset)
+
     # train or load laplace approx
     print("==> train laplace ae")
     train_lae(dataset)

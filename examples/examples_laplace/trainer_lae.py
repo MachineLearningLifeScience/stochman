@@ -15,14 +15,17 @@ from ae_models import get_encoder, get_decoder
 
 import dill
 
+
 def save_laplace(la, filepath):
     with open(filepath, 'wb') as outpt:
         dill.dump(la, outpt)
+
 
 def load_laplace(filepath):
     with open(filepath, 'rb') as inpt:
         la = dill.load(inpt)
     return la
+
 
 def test_lae(dataset, batch_size=1):
 
@@ -82,7 +85,7 @@ def test_lae(dataset, batch_size=1):
 
     all_f_mu, all_f_sigma = [], []
     for i in tqdm(range(Z_grid_test.shape[0])):
-        f_mu, f_var = la(Z_grid_test[i:i+1,:])
+        f_mu, f_var = la(Z_grid_test[i:i+1,:], pred_type = pred_type)
 
         all_f_mu += [f_mu.squeeze().detach().cpu()]
         all_f_sigma += [f_var.squeeze().sqrt().cpu()]
@@ -92,7 +95,7 @@ def test_lae(dataset, batch_size=1):
 
     # get diagonal elements
     idx = torch.arange(f_sigma.shape[1])
-    sigma_vector = f_sigma[:, idx, idx].mean(axis=1)
+    sigma_vector = f_sigma.mean(axis=1) if pred_type == "nn" else f_sigma[:, idx, idx].mean(axis=1)
 
     # create figures
     if not os.path.isdir(f"figures/{dataset}"): os.makedirs(f"figures/{dataset}")
@@ -173,6 +176,7 @@ def train_lae(dataset="mnist", n_epochs=50, batch_size=32):
 
     # save weights
     save_laplace(la, f"weights/{dataset}/laplace_decoder.pkl")
+
 
 if __name__ == "__main__":
 

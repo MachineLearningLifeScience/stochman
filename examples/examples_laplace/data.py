@@ -10,8 +10,8 @@ def get_data(name, batch_size = 32):
         dataset = MNIST('', train=True, download=True, transform=transforms.ToTensor())
         mnist_train, mnist_val = random_split(dataset, [55000, 5000])
 
-        train_loader = DataLoader(mnist_train, batch_size=batch_size)
-        val_loader = DataLoader(mnist_val, batch_size=batch_size)
+        train_loader = DataLoader(mnist_train, batch_size=batch_size, pin_memory=True)
+        val_loader = DataLoader(mnist_val, batch_size=batch_size, pin_memory=True)
     
     elif name == "swissrole":
         N_train = 50000
@@ -27,8 +27,8 @@ def get_data(name, batch_size = 32):
         X_train, y_train = swiss_roll_2d(n_samples=N_train)
         X_val, y_test = swiss_roll_2d(n_samples=N_val)
 
-        train_loader = DataLoader(TensorDataset(X_train, y_train), batch_size=batch_size)
-        val_loader = DataLoader(TensorDataset(X_val, y_test), batch_size=batch_size)
+        train_loader = DataLoader(TensorDataset(X_train, y_train), batch_size=batch_size, pin_memory=True)
+        val_loader = DataLoader(TensorDataset(X_val, y_test), batch_size=batch_size, pin_memory=True)
 
     else:
         raise NotImplemplenetError

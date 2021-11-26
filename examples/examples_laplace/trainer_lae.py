@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
+import time
 
 from laplace import Laplace
 from data import get_data
@@ -40,32 +41,35 @@ def test_lae(dataset, batch_size=1):
     
     train_loader, val_loader = get_data(dataset, batch_size)
 
+    pred_type =  "nn"
+
     # forward eval la
-    x, z, labels, mu_rec, sigma_rec = [], [], [], [], []
+    x, z_list, labels, mu_rec, sigma_rec = [], [], [], [], []
     for i, (X, y) in tqdm(enumerate(val_loader)):
-        X = X.view(X.size(0), -1).to(device)
-        with torch.inference_mode():
-            z += [encoder(X)]
+        t0 = time.time()
+        with torch.no_grad():
+            
+            X = X.view(X.size(0), -1).to(device)
+            z = encoder(X)
+            
+            mu, var = la(z, pred_type = pred_type)
 
-            # pred_type : {glm, nn}
-            # link_approx only relevant for classification
-            pred_type =  "glm"
-            mu, var = la(z[-1], pred_type = pred_type)
+            mu_rec += [mu.detach()]
+            sigma_rec += [var.sqrt()]
 
-            x += [X.cpu()]
+            x += [X]
             labels += [y]
-            mu_rec += [mu.detach().cpu()]
-            sigma_rec += [var.sqrt().cpu()]
+            z_list += [z]
 
         # only show the first 50 points
         # if i > 50:
         #    break
     
-    x = torch.cat(x, dim=0).numpy()
+    x = torch.cat(x, dim=0).cpu().numpy()
     labels = torch.cat(labels, dim=0).numpy()
-    z = torch.cat(z, dim=0).cpu().numpy()
-    mu_rec = torch.cat(mu_rec, dim=0).numpy()
-    sigma_rec = torch.cat(sigma_rec, dim=0).numpy()
+    z = torch.cat(z_list, dim=0).cpu().numpy()
+    mu_rec = torch.cat(mu_rec, dim=0).cpu().numpy()
+    sigma_rec = torch.cat(sigma_rec, dim=0).cpu().numpy()
 
     ###
     # Grid for probability map
@@ -81,17 +85,21 @@ def test_lae(dataset, batch_size=1):
     xg = xg_mesh.reshape(n_points_axis ** 2, 1)
     yg = yg_mesh.reshape(n_points_axis ** 2, 1)
     Z_grid_test = np.hstack((xg, yg))
-    Z_grid_test = torch.from_numpy(Z_grid_test).to(device)
+    Z_grid_test = torch.from_numpy(Z_grid_test)
+
+    z_grid_loader = DataLoader(TensorDataset(Z_grid_test), batch_size=batch_size, pin_memory=True)
 
     all_f_mu, all_f_sigma = [], []
-    for i in tqdm(range(Z_grid_test.shape[0])):
-        f_mu, f_var = la(Z_grid_test[i:i+1,:], pred_type = pred_type)
+    for z_grid in tqdm(z_grid_loader):
+        
+        z_grid = z_grid[0].to(device)
+        f_mu, f_var = la(z_grid, pred_type = pred_type)
 
         all_f_mu += [f_mu.squeeze().detach().cpu()]
         all_f_sigma += [f_var.squeeze().sqrt().cpu()]
 
-    f_mu = torch.stack(all_f_mu, dim=0)
-    f_sigma = torch.stack(all_f_sigma, dim=0)
+    f_mu = torch.cat(all_f_mu, dim=0)
+    f_sigma = torch.cat(all_f_sigma, dim=0)
 
     # get diagonal elements
     idx = torch.arange(f_sigma.shape[1])
@@ -157,7 +165,7 @@ def train_lae(dataset="mnist", n_epochs=50, batch_size=32):
     z = torch.cat(z, dim=0).cpu()
     x = torch.cat(x, dim=0).cpu()
 
-    z_loader = DataLoader(TensorDataset(z, x), batch_size=batch_size)
+    z_loader = DataLoader(TensorDataset(z, x), batch_size=batch_size, pin_memory=True)
 
     # Laplace Approximation
     la = Laplace(decoder, 'regression', subset_of_weights='last_layer', hessian_structure='diag')
@@ -182,7 +190,7 @@ if __name__ == "__main__":
 
     train = False
     dataset = "mnist"
-    batch_size = 1
+    batch_size = 128
 
     # train or load laplace auto encoder
     if train:
@@ -194,4 +202,5 @@ if __name__ == "__main__":
 
     # evaluate laplace auto encoder
     print("==> evaluate lae")
-    test_lae(dataset)
+    test_lae(dataset, batch_size)
+    

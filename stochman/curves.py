@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 
 import torch
 from torch import nn
+from matplotlib.axis import Axis
 
 
 class BasicCurve(ABC, nn.Module):
@@ -47,7 +48,9 @@ class BasicCurve(ABC, nn.Module):
         """Returns the batch dimension e.g. the number of curves"""
         return self.begin.shape[0]
 
-    def plot(self, t0: float = 0.0, t1: float = 1.0, N: int = 100, *plot_args, **plot_kwargs):
+    def plot(
+        self, t0: float = 0.0, t1: float = 1.0, N: int = 100, ax: Axis = None, *plot_args, **plot_kwargs
+    ):
         """Plot the curve.
 
         Args:
@@ -70,15 +73,20 @@ class BasicCurve(ABC, nn.Module):
             if len(points.shape) == 2:
                 points.unsqueeze_(0)  # 1xNxD
 
+            plot_in = ax or plt
+            if ax is not None:
+                t = t.detach().numpy()
+                points = points.detach().numpy()
+
             figs = []
             if points.shape[-1] == 1:
                 for b in range(points.shape[0]):
-                    fig = plt.plot(t, points[b], *plot_args, **plot_kwargs)
+                    fig = plot_in.plot(t, points[b], *plot_args, **plot_kwargs)
                     figs.append(fig)
                 return figs
             if points.shape[-1] == 2:
                 for b in range(points.shape[0]):
-                    fig = plt.plot(points[b, :, 0], points[b, :, 1], *plot_args, **plot_kwargs)
+                    fig = plot_in.plot(points[b, :, 0], points[b, :, 1], *plot_args, **plot_kwargs)
                     figs.append(fig)
                 return figs
 

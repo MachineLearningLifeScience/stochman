@@ -61,13 +61,13 @@ class TestCurves:
 
     @pytest.mark.parametrize("batch_size", [1, 5])
     def test_fit_func(self, curve_class, batch_size):
-        """ test fit function """
+        """test fit function"""
         c = curve_class(torch.randn(batch_size, 2), torch.randn(batch_size, 2), 20)
         loss = c.fit(torch.linspace(0, 1, 10), torch.randn(5, 10, 2))
         assert isinstance(loss, torch.Tensor)
 
     def test_getindex_func(self, curve_class):
-        """ test __getidx__ function """
+        """test __getidx__ function"""
         batched_c = curve_class(torch.randn(5, 2), torch.randn(5, 2))
         for i in range(len(batched_c)):
             c = batched_c[i]
@@ -77,14 +77,14 @@ class TestCurves:
             assert c.device == batched_c.device
 
     def test_setindex_func(self, curve_class):
-        """ test __setidx__ function """
+        """test __setidx__ function"""
         batched_c = curve_class(torch.randn(5, 2), torch.randn(5, 2))
         for i in range(len(batched_c)):
             batched_c[i] = curve_class(torch.randn(1, 2), torch.randn(1, 2))
             assert batched_c[i]
 
     def test_to_other(self, curve_class):
-        """ test .tospline and .todiscrete """
+        """test .tospline and .todiscrete"""
         c = curve_class(torch.randn(1, 2), torch.randn(1, 2), 20)
         if curve_class == curves.DiscreteCurve:
             new_c = c.tospline()
@@ -112,3 +112,19 @@ class TestCurves:
         assert isinstance(Ct, torch.Tensor)
         assert new_t.shape == (batch_size, timesteps)
         assert Ct.shape == (batch_size, timesteps, dim)
+
+    def test_plotting_in_axis(self, curve_class):
+        batch_size = 5
+        dim = 2
+        begin = torch.randn(batch_size, dim)
+        end = torch.randn(batch_size, dim)
+        c = curve_class(begin, end, 20)
+        try:
+            import torchplot as plt
+
+            fig, ax = plt.subplots(1, 1)
+            c.plot(ax=ax)
+            plt.close(fig)
+            assert True
+        except Exception as e:
+            assert False, e

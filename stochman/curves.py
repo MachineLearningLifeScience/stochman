@@ -3,8 +3,8 @@ from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
 import torch
-from torch import nn
 from matplotlib.axis import Axis
+from torch import nn
 
 
 class BasicCurve(ABC, nn.Module):

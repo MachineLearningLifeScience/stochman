@@ -669,21 +669,18 @@ class LocalVarMetric(Manifold):
 
 class StatisticalManifold(Manifold):
     """
-    A class for computing Stochastic Manifolds and defining
+    A class for computing Statistical Manifolds and defining
     a geometry in the latent space of a certain model
     using the pullback of the Fisher-Rao metric.
 
-    The methods for computing shortest paths are layed out
-    in
-        Pulling Back Information Geometry
-        TODO: Add authors and the rest of the info.
+    The methods for computing shortest paths and metrics are layed out in:
 
-    TODO:
-        -  Right now we are getting geodesics by computing shortest paths.What about
-           computing the metric? The code we have for approximating the FR
-           metric is flimsy. Søren had the idea of having a `kl_divergence`-like
-           interface for computing FRs, and then using Jacobians to get an approximation
-           of the metric itself.
+    Pulling Back Information Geometry
+
+    Georgios Arvanitidis, Miguel González-Duque, Alison Pouplin
+    Dimitris Kalatzis & Søren Hauberg.
+
+    https://arxiv.org/abs/2106.05367
     """
 
     def __init__(self, model: torch.nn.Module) -> None:
@@ -691,7 +688,7 @@ class StatisticalManifold(Manifold):
         Class constructor:
 
         Arguments:
-        - model: a torch module that implements a `decode(z: Tensor) -> Distribution`.
+        - model: a torch module that implements a `decode(z: Tensor) -> Distribution` method.
 
         TODO:
             - Should we inherit from EmbeddedManifold and use the `embed` function instead?
@@ -708,14 +705,25 @@ class StatisticalManifold(Manifold):
 
         try:
             kl = kl_divergence(dist1, dist2)
-        except Exception:
+        except NotImplementedError:
             # TODO: fix the exception.
             raise ValueError("Did you forget to register your KL?")
 
+        # Prop. A.2. of Pulling back information geometry
         return kl.sum() * (2 * (dt.mean() ** -1))
 
     def curve_length(self, curve: BasicCurve) -> torch.Tensor:
-        raise NotImplementedError
+        dist1 = self.model.decode(curve[:-1])
+        dist2 = self.model.decode(curve[1:])
+
+        try:
+            kl = kl_divergence(dist1, dist2)
+        except NotImplementedError:
+            # TODO: fix the exception.
+            raise ValueError("Did you forget to register your KL?")
+
+        # Prop. A.2. of Pulling back information geometry
+        return torch.sqrt(2 * torch.sum(kl))
 
     def metric(self, points: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError

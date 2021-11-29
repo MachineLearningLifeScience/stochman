@@ -57,6 +57,7 @@ class BasicCurve(ABC, nn.Module):
             t0: initial timepoint
             t1: final timepoint
             N: number of points used for plotting the curve
+            ax: (optional) plt axis in which to plot the curve.
             plot_args: additional arguments passed directly to plt.plot
             plot_kwargs: additional keyword-arguments passed directly to plt.plot
 

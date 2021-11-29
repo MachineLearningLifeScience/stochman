@@ -15,8 +15,8 @@ import torch
 import torch.nn as nn
 from torch.distributions import Poisson
 from sklearn.cluster import KMeans
-import matplotlib.pyplot as plt
 
+import torchplot as plt
 from stochman.manifold import StatisticalManifold
 
 
@@ -115,8 +115,8 @@ class DecoderWithUQ(nn.Module):
         enc_x, enc_y = encodings[:, 0], encodings[:, 1]
 
         n_x, n_y = 300, 300
-        x_lims = (enc_x.min() - 0.1, enc_x.max() + 0.1)
-        y_lims = (enc_y.min() - 0.1, enc_y.max() + 0.1)
+        x_lims = (enc_x.min() - 1, enc_x.max() + 1)
+        y_lims = (enc_y.min() - 1, enc_y.max() + 1)
         z1 = torch.linspace(*x_lims, n_x)
         z2 = torch.linspace(*y_lims, n_x)
 
@@ -151,12 +151,14 @@ class DecoderWithUQ(nn.Module):
 if __name__ == "__main__":
     dec = DecoderWithUQ()
     dec_manifold = StatisticalManifold(dec)
-    print(dec_manifold)
-    zs = torch.randn(64, 2)
-    rates = dec.decode(zs)
 
-    dec.plot_latent_space()
-    geodesic, success = dec_manifold.connecting_geodesic(dec.encodings[0], dec.encodings[1])
-    print(success)
-    geodesic.plot()
+    _, ax = plt.subplots(1, 1, figsize=(7, 7))
+    dec.plot_latent_space(ax=ax)
+
+    for _ in range(10):
+        idx_1, idx_2 = np.random.randint(0, len(dec.encodings), size=(2,))
+        geodesic, _ = dec_manifold.connecting_geodesic(dec.encodings[idx_1], dec.encodings[idx_2])
+        geodesic.plot(ax=ax)
+
+    ax.axis("off")
     plt.show()

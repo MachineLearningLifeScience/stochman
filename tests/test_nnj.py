@@ -9,7 +9,7 @@ from stochman import nnj
 
 _batch_size = 2
 _features = 5
-_dims = 10
+_dims = 6
 
 _linear_input = torch.randn(_batch_size, _features)
 _1d_conv_input = torch.randn(_batch_size, _features, _dims)
@@ -49,10 +49,10 @@ def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
                 nnj.ReLU(),
                 nnj.Sqrt(),
                 nnj.Hardshrink(),
-                nnj.LeakyReLU(),
             ),
             _linear_input,
         ),
+        (nnj.Sequential(nnj.Linear(_features, 2), nnj.LeakyReLU()), _linear_input),
         (nnj.Sequential(nnj.Linear(_features, 2), nnj.OneMinusX()), _linear_input),
         (nnj.Sequential(nnj.Conv1d(_features, 2, 5), nnj.ConvTranspose1d(2, _features, 5)), _1d_conv_input),
         (nnj.Sequential(nnj.Conv2d(_features, 2, 5), nnj.ConvTranspose2d(2, _features, 5)), _2d_conv_input),
@@ -88,7 +88,7 @@ def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
             nnj.Sequential(
                 nnj.Conv1d(_features, 2, 3),
                 nnj.Flatten(),
-                nnj.Linear(8 * 2, 5),
+                nnj.Linear(4 * 2, 5),
                 nnj.ReLU(),
             ),
             _1d_conv_input,
@@ -97,7 +97,7 @@ def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
             nnj.Sequential(
                 nnj.Conv2d(_features, 2, 3),
                 nnj.Flatten(),
-                nnj.Linear(8 * 8 * 2, 5),
+                nnj.Linear(4 * 4 * 2, 5),
                 nnj.ReLU(),
             ),
             _2d_conv_input,
@@ -106,7 +106,7 @@ def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
             nnj.Sequential(
                 nnj.Conv3d(_features, 2, 3),
                 nnj.Flatten(),
-                nnj.Linear(8 * 8 * 8 * 2, 5),
+                nnj.Linear(4 * 4 * 4 * 2, 5),
                 nnj.ReLU(),
             ),
             _3d_conv_input,

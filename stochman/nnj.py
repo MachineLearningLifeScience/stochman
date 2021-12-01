@@ -301,8 +301,8 @@ class Hardtanh(AbstractActivationJacobian, nn.Hardtanh):
 
 class LeakyReLU(AbstractActivationJacobian, nn.LeakyReLU):
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
-        jac = torch.zeros_like(val)
-        jac[val.abs() < 1.0] = 1.0
+        jac = torch.ones_like(val)
+        jac[val < 0.0] = self.negative_slope
         return jac
 
 

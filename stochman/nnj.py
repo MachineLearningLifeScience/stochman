@@ -266,6 +266,27 @@ class AbstractActivationJacobian:
         return val
 
 
+class BatchNorm1d(AbstractActivationJacobian, nn.BatchNorm1d):
+    # only implements jacobian during testing
+    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
+        jac = (self.weight / (self.running_var + self.eps).sqrt()).unsqueeze(0)
+        return jac
+
+
+class BatchNorm2d(AbstractActivationJacobian, nn.BatchNorm2d):
+    # only implements jacobian during testing
+    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
+        jac = (self.weight / (self.running_var + self.eps).sqrt()).unsqueeze(0)
+        return jac
+
+
+class BatchNorm3d(AbstractActivationJacobian, nn.BatchNorm3d):
+    # only implements jacobian during testing
+    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
+        jac = (self.weight / (self.running_var + self.eps).sqrt()).unsqueeze(0)
+        return jac
+
+
 class Sigmoid(AbstractActivationJacobian, nn.Sigmoid):
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = val * (1.0 - val)
@@ -302,7 +323,7 @@ class Hardtanh(AbstractActivationJacobian, nn.Hardtanh):
 class LeakyReLU(AbstractActivationJacobian, nn.LeakyReLU):
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = torch.ones_like(val)
-        jac[val < 0.0] = self.negative_slope
+        jac[x < 0.0] = self.negative_slope
         return jac
 
 

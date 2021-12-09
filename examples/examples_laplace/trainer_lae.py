@@ -11,9 +11,9 @@ from tqdm import tqdm
 import time
 
 import sys
-sys.path.append(os.getcwd() + "/examples/examples_laplace/Laplace")
-from laplace_local.laplace_local import Laplace 
-#from laplace import Laplace
+#sys.path.append(os.getcwd() + "/examples/examples_laplace/Laplace")
+#from laplace_local.laplace_local import Laplace 
+from laplace import Laplace
 from data import get_data, generate_latent_grid
 from ae_models import get_encoder, get_decoder
 

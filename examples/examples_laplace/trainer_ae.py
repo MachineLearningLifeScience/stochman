@@ -168,7 +168,7 @@ def test_ae(dataset, batch_size=1, use_var_decoder=False):
 
     if dataset == "mnist":
         for i in range(min(len(z), 10)):
-            nplots = 3 if use_var_decoder else 1
+            nplots = 3 if use_var_decoder else 2
 
             plt.figure()
             plt.subplot(1,nplots,1)
@@ -218,7 +218,7 @@ if __name__ == "__main__":
 
     dataset = "mnist"
     train = True
-    use_var_decoder = True
+    use_var_decoder = False
 
     # train or load auto encoder
     if train:

@@ -10,8 +10,11 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 import time
 
-from laplace import Laplace
-from data import get_data
+import sys
+sys.path.append(os.getcwd() + "/examples/examples_laplace/Laplace")
+from laplace_local.laplace_local import Laplace 
+#from laplace import Laplace
+from data import get_data, generate_latent_grid
 from ae_models import get_encoder, get_decoder
 
 import dill
@@ -28,7 +31,7 @@ def load_laplace(filepath):
     return la
 
 
-def test_lae(dataset, batch_size=1):
+def test_lae(dataset, batch_size=1, laplace_approx="decoder"):
 
     # initialize_model
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -37,7 +40,7 @@ def test_lae(dataset, batch_size=1):
     encoder = get_encoder(dataset, latent_size).eval().to(device)
     encoder.load_state_dict(torch.load(f"weights/{dataset}/encoder.pth"))
 
-    la = load_laplace(f"weights/{dataset}/laplace_decoder.pkl")
+    la = load_laplace(f"weights/{dataset}/laplace/decoder.pkl")
     
     train_loader, val_loader = get_data(dataset, batch_size)
 
@@ -71,32 +74,26 @@ def test_lae(dataset, batch_size=1):
     mu_rec = torch.cat(mu_rec, dim=0).cpu().numpy()
     sigma_rec = torch.cat(sigma_rec, dim=0).cpu().numpy()
 
-    ###
     # Grid for probability map
-    ###
-
     n_points_axis = 50
-    x_min, x_max = z[:, 0].min(), z[:, 0].max() 
-    y_min, y_max = z[:, 1].min(), z[:, 1].max() 
-    zx_grid = np.linspace(x_min - 1.5, x_max + 1.5, n_points_axis, dtype=np.float32)
-    zy_grid = np.linspace(y_min - 1.5, y_max + 1.5, n_points_axis, dtype=np.float32)
-
-    xg_mesh, yg_mesh = np.meshgrid(zx_grid, zy_grid)
-    xg = xg_mesh.reshape(n_points_axis ** 2, 1)
-    yg = yg_mesh.reshape(n_points_axis ** 2, 1)
-    Z_grid_test = np.hstack((xg, yg))
-    Z_grid_test = torch.from_numpy(Z_grid_test)
-
-    z_grid_loader = DataLoader(TensorDataset(Z_grid_test), batch_size=batch_size, pin_memory=True)
+    xg_mesh, yg_mesh, z_grid_loader = generate_latent_grid(
+        z[:, 0].min(),
+        z[:, 0].max(),
+        z[:, 1].min(),
+        z[:, 1].max(),
+        n_points_axis,
+    )
 
     all_f_mu, all_f_sigma = [], []
     for z_grid in tqdm(z_grid_loader):
         
         z_grid = z_grid[0].to(device)
-        f_mu, f_var = la(z_grid, pred_type = pred_type)
 
-        all_f_mu += [f_mu.squeeze().detach().cpu()]
-        all_f_sigma += [f_var.squeeze().sqrt().cpu()]
+        with torch.inference_mode():
+            f_mu, f_var = la(z_grid, pred_type = pred_type)
+
+        all_f_mu += [f_mu.cpu()]
+        all_f_sigma += [f_var.sqrt().cpu()]
 
     f_mu = torch.cat(all_f_mu, dim=0)
     f_sigma = torch.cat(all_f_sigma, dim=0)
@@ -140,7 +137,7 @@ def test_lae(dataset, batch_size=1):
             plt.close(); plt.cla()
 
 
-def train_lae(dataset="mnist", n_epochs=50, batch_size=32):
+def train_lae(dataset="mnist", n_epochs=50, batch_size=32, laplace_approx="decoder"):
 
     # initialize_model
     latent_size = 2
@@ -149,8 +146,8 @@ def train_lae(dataset="mnist", n_epochs=50, batch_size=32):
     decoder = get_decoder(dataset, latent_size).eval().to(device)
 
     # load model weights
-    encoder.load_state_dict(torch.load(f"weights/{dataset}/encoder.pth"))
-    decoder.load_state_dict(torch.load(f"weights/{dataset}/decoder.pth"))
+    encoder.load_state_dict(torch.load(f"weights/{dataset}/ae_[use_var_dec=False]/encoder.pth"))
+    decoder.load_state_dict(torch.load(f"weights/{dataset}/ae_[use_var_dec=False]/mu_decoder.pth"))
 
     train_loader, val_loader = get_data(dataset, batch_size)
     
@@ -183,7 +180,8 @@ def train_lae(dataset="mnist", n_epochs=50, batch_size=32):
     #    hyper_optimizer.step()
 
     # save weights
-    save_laplace(la, f"weights/{dataset}/laplace_decoder.pkl")
+    if not os.path.isdir(f"weights/{dataset}/laplace"): os.makedirs(f"weights/{dataset}/laplace")
+    save_laplace(la, f"weights/{dataset}/laplace/decoder.pkl")
 
 
 if __name__ == "__main__":
@@ -191,16 +189,22 @@ if __name__ == "__main__":
     train = False
     dataset = "mnist"
     batch_size = 128
+    laplace_approx = ("decoder", "encoder")
 
     # train or load laplace auto encoder
     if train:
         print("==> train lae")
         train_lae(
             dataset=dataset, 
-            batch_size=batch_size
+            batch_size=batch_size,
+            laplace_approx=laplace_approx,
         )
 
     # evaluate laplace auto encoder
     print("==> evaluate lae")
-    test_lae(dataset, batch_size)
+    test_lae(
+        dataset, 
+        batch_size,
+        laplace_approx
+    )
     

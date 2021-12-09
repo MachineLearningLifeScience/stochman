@@ -278,7 +278,7 @@ if __name__ == "__main__":
 
     dataset = "mnist"
     train = True
-    use_var_decoder = True
+    use_var_decoder = False
 
     # train or load auto encoder
     if train:

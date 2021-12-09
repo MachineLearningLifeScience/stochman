@@ -4,7 +4,7 @@ from trainer_lae import train_lae, test_lae
 
 if __name__ == "__main__":
 
-    dataset = "swissrole"
+    dataset = "mnist"
 
     # train or load auto encoder
     print("==> train ae")

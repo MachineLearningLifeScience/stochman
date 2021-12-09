@@ -34,3 +34,21 @@ def get_data(name, batch_size = 32):
         raise NotImplemplenetError
 
     return train_loader, val_loader
+
+
+def generate_latent_grid(x_min, x_max, y_min, y_max, n_points_axis=50, batch_size=1):
+
+    x_margin = (x_max - x_min)*0.3
+    y_margin = (x_max - x_min)*0.3
+    zx_grid = np.linspace(x_min - x_margin, x_max + x_margin, n_points_axis, dtype=np.float32)
+    zy_grid = np.linspace(y_min - y_margin, y_max + y_margin, n_points_axis, dtype=np.float32)
+
+    xg_mesh, yg_mesh = np.meshgrid(zx_grid, zy_grid)
+    xg = xg_mesh.reshape(n_points_axis ** 2, 1)
+    yg = yg_mesh.reshape(n_points_axis ** 2, 1)
+    Z_grid_test = np.hstack((xg, yg))
+    Z_grid_test = torch.from_numpy(Z_grid_test)
+
+    z_grid_loader = DataLoader(TensorDataset(Z_grid_test), batch_size=batch_size, pin_memory=True)
+
+    return xg_mesh, yg_mesh, z_grid_loader    

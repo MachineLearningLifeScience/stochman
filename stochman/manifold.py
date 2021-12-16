@@ -5,7 +5,7 @@ from typing import Optional, Tuple, Union
 import numpy as np
 import torch
 from torch.autograd import grad
-from torch.distributions import kl_divergence
+from torch.distributions import kl_divergence, Distribution
 
 from stochman.curves import BasicCurve, CubicSpline
 from stochman.geodesic import geodesic_minimizing_energy, shooting_geodesic
@@ -669,9 +669,13 @@ class LocalVarMetric(Manifold):
 
 class StatisticalManifold(Manifold):
     """
-    A class for computing Statistical Manifolds and defining
+    An interface for computing Statistical Manifolds and defining
     a geometry in the latent space of a certain model
     using the pullback of the Fisher-Rao metric.
+
+    This interface expects the user to implement a
+    `decode(self, z: torch.Tensor) -> Distribution`
+    method.
 
     The methods for computing shortest paths and metrics are layed out in:
 
@@ -689,9 +693,6 @@ class StatisticalManifold(Manifold):
 
         Arguments:
         - model: a torch module that implements a `decode(z: Tensor) -> Distribution` method.
-
-        TODO:
-            - Should we inherit from EmbeddedManifold and use the `embed` function instead?
         """
         super().__init__()
 
@@ -699,6 +700,12 @@ class StatisticalManifold(Manifold):
         assert "decode" in dir(model)
 
     def curve_energy(self, curve: BasicCurve) -> torch.Tensor:
+        """
+        Returns the curve energy in the statistical manifold, according
+        to the pullback of the Fisher-Rao metric.
+
+        See Pulling Back Information Geometry, Eq. (11) or Proposition A.2.
+        """
         dt = (curve[:-1] - curve[1:]).pow(2).sum(dim=-1, keepdim=True)  # (N-1)x1
         dist1 = self.model.decode(curve[:-1])
         dist2 = self.model.decode(curve[1:])
@@ -713,6 +720,12 @@ class StatisticalManifold(Manifold):
         return kl.sum() * (2 * (dt.mean() ** -1))
 
     def curve_length(self, curve: BasicCurve) -> torch.Tensor:
+        """
+        Returns the curve length in the statistical manifold, according
+        to the pullback of the Fisher-Rao metric.
+
+        See Pulling Back Information Geometry, Eq. (10) or Proposition A.2.
+        """
         dist1 = self.model.decode(curve[:-1])
         dist2 = self.model.decode(curve[1:])
 
@@ -726,4 +739,11 @@ class StatisticalManifold(Manifold):
         return torch.sqrt(2 * torch.sum(kl))
 
     def metric(self, points: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+    def decode(self, z: torch.tensor) -> Distribution:
+        """
+        Decodes a point z into p(x|z), where p(x|z) can be
+        any Distribution from torch.distributions.
+        """
         raise NotImplementedError

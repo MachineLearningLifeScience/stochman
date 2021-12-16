@@ -37,7 +37,7 @@ class TranslatedSigmoid(nn.Module):
         return val
 
 
-class DecoderWithUQ(nn.Module):
+class DecoderWithUQ(nn.Module, StatisticalManifold):
     """
     An example of a decoder that returns a Poisson.
     You could have your own model (e.g. a full VAE),

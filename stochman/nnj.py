@@ -320,6 +320,13 @@ class Hardtanh(AbstractActivationJacobian, nn.Hardtanh):
         return jac
 
 
+class PReLU(AbstractActivationJacobian, nn.PReLU):
+    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
+        jac = torch.ones_like(val)
+        jac[x < 0.0] = self.weight
+        return jac
+
+
 class LeakyReLU(AbstractActivationJacobian, nn.LeakyReLU):
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = torch.ones_like(val)

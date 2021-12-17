@@ -53,6 +53,7 @@ def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
         (nnj.Sequential(nnj.Linear(_features, 2), nnj.LeakyReLU()), _linear_input_shape),
         (nnj.Sequential(nnj.Linear(_features, 2), nnj.Tanh()), _linear_input_shape),
         (nnj.Sequential(nnj.Linear(_features, 2), nnj.OneMinusX()), _linear_input_shape),
+        (nnj.Sequential(nnj.Linear(_features, 2), nnj.PReLU()), _linear_input_shape),
         (
             nnj.Sequential(nnj.Conv1d(_features, 2, 5), nnj.ConvTranspose1d(2, _features, 5)),
             _1d_conv_input_shape,

@@ -103,4 +103,4 @@ if __name__ == "__main__":
     print(model)
 
     # Trains
-    run(model, train_dataset, test_dataset, name="vmf_motion")
+    run(model, train_dataset, test_dataset, name="motion")

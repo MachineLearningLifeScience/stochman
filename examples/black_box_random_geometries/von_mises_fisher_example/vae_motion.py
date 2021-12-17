@@ -73,7 +73,7 @@ class VAE_Motion(torch.nn.Module, StatisticalManifold):
         return q_z_given_x, p_x_given_z
 
     def elbo_loss(self, x: torch.Tensor, q_z_given_x: Normal, p_x_given_z: VonMisesFisher):
-        rec_loss = p_x_given_z.log_prob(x).sum(dim=1)
+        rec_loss = -p_x_given_z.log_prob(x).sum(dim=1)
         kl = kl_divergence(q_z_given_x, self.p_z).sum(dim=1)
 
         return (rec_loss + kl).mean()

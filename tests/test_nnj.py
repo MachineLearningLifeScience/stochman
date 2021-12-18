@@ -129,27 +129,34 @@ def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
         (nnj.Sequential(nnj.Conv3d(_features, 3, 3), nnj.BatchNorm3d(3)), _3d_conv_input_shape),
     ],
 )
+@pytest.mark.parametrize("device", ["cpu", "cuda:0"])
 class TestJacobian:
     @pytest.mark.parametrize("dtype", [torch.float, torch.double])
-    def test_jacobians(self, model, input_shape, dtype):
+    def test_jacobians(self, model, input_shape, device, dtype):
         """Test that the analytical jacobian of the model is consistent with finite
         order approximation
         """
-        model = deepcopy(model).to(dtype).eval()
-        input = torch.randn(*input_shape, dtype=dtype)
+        if device == "cuda" and not torch.cuda.is_available():
+            pytest.skip("Test requires cuda support")
+
+        model = deepcopy(model).to(device=device, dtype=dtype).eval()
+        input = torch.randn(*input_shape, device=device, dtype=dtype)
         _, jac = model(input, jacobian=True)
-        jacnum = _compare_jacobian(model, input)
-        assert torch.isclose(jac, jacnum, atol=1e-7).all(), "jacobians did not match"
+        jacnum = _compare_jacobian(model, input).to(device)
+        assert torch.isclose(jac, jacnum, atol=1e-5).all(), "jacobians did not match"
 
     @pytest.mark.parametrize("return_jac", [True, False])
-    def test_jac_return(self, model, input_shape, return_jac):
+    def test_jac_return(self, model, input_shape, device, return_jac):
         """ Test that all models returns the jacobian output if asked for it """
-
-        output = model(torch.randn(*input_shape), jacobian=return_jac)
+        input = torch.randn(*input_shape, device=device)
+        model = deepcopy(model).to(device)
+        output = model(input, jacobian=return_jac)
         if return_jac:
             assert len(output) == 2, "expected two outputs when jacobian=True"
             assert all(
                 isinstance(o, torch.Tensor) for o in output
             ), "expected all outputs to be torch tensors"
+            assert all(str(o.device) == device for o in output)
         else:
             assert isinstance(output, torch.Tensor)
+            assert str(output.device) == device

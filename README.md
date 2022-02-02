@@ -8,9 +8,16 @@ on random manifolds learned from finite noisy data. Each algorithm assume that t
 manifold model implement a specific set of interfaces.
 
 ## Installation
-As simple as
-```
+
+For the latest release
+```bash
 pip install stochman
+```
+For master version with most recent changes we recommend:
+```bash
+git clone https://github.com/MachineLearningLifeScience/stochman
+cd stochman
+python setup.py install
 ```
 
 ## API overview

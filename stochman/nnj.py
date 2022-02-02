@@ -266,6 +266,26 @@ class AbstractActivationJacobian:
         return val
 
 
+class Softmax(AbstractActivationJacobian, nn.Softmax):
+    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
+        if self.dim == 0:
+            raise ValueError("Jacobian computation not supported for `dim=0`")
+        jac = torch.diag_embed(val) - torch.matmul(val.unsqueeze(-1), val.unsqueeze(-2))
+        return jac
+
+    def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
+        jac = self._jacobian(x, val)
+        n = jac_in.ndim - jac.ndim
+        jac = jac.reshape((1,) * n + jac.shape)
+        if jac_in.ndim == 4:
+            return (jac @ jac_in.permute(3, 0, 1, 2)).permute(1, 2, 3, 0)
+        if jac_in.ndim == 5:
+            return (jac @ jac_in.permute(3, 4, 0, 1, 2)).permute(2, 3, 4, 0, 1)
+        if jac_in.ndim == 6:
+            return (jac @ jac_in.permute(3, 4, 5, 0, 1, 2)).permute(3, 4, 5, 0, 1, 2)
+        return jac @ jac_in
+
+
 class BatchNorm1d(AbstractActivationJacobian, nn.BatchNorm1d):
     # only implements jacobian during testing
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:

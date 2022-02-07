@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-from typing import Optional, Tuple, Union
 from math import ceil
+from typing import Optional, Tuple, Union
 
 import networkx as nx
 import torch
 
-from stochman.manifold import Manifold
 from stochman.curves import CubicSpline, DiscreteCurve
+from stochman.manifold import Manifold
 
 
 class DiscretizedManifold(Manifold):

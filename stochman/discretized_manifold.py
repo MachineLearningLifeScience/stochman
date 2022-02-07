@@ -18,7 +18,6 @@ class DiscretizedManifold(Manifold):
         self._diagonal_metric = False
         self._alpha = torch.Tensor()
 
-
     def fit(self, model, grid, use_diagonals=True, batch_size=4, interpolation_noise=0.0):
         """
         Discretize a manifold to a given grid.
@@ -30,18 +29,18 @@ class DiscretizedManifold(Manifold):
                         the manifold will be discretized. For example,
                         grid = [torch.linspace(-3, 3, 50), torch.linspace(-3, 3, 50)]
                         will discretize a two-dimensional manifold on a 50x50 grid.
-            
+
             use_diagonals:
                         If True, diagonal edges are included in the graph, otherwise
                         they are excluded.
                         Default: True.
-            
+
             batch_size: Number of edge-lengths that are computed in parallel. The larger
                         value you pick here, the faster the discretization will be.
                         However, memory usage increases with this number, so a good
                         choice is model and hardware specific.
                         Default: 4.
-            
+
             interpolation_noise:
                         On fitting, the manifold metric is evalated on the provided grid.
                         The `metric` function then performs interpolation of this metric,
@@ -60,53 +59,53 @@ class DiscretizedManifold(Manifold):
 
         # Add nodes to graph
         xsize, ysize = len(grid[0]), len(grid[1])
-        node_idx = lambda x, y: x*ysize + y
-        self.G.add_nodes_from(range(xsize*ysize))
+        node_idx = lambda x, y: x * ysize + y
+        self.G.add_nodes_from(range(xsize * ysize))
 
         point_set = torch.cartesian_prod(
-            torch.linspace(0, xsize-1, xsize, dtype=torch.long),
-            torch.linspace(0, ysize-1, ysize, dtype=torch.long)
+            torch.linspace(0, xsize - 1, xsize, dtype=torch.long),
+            torch.linspace(0, ysize - 1, ysize, dtype=torch.long)
         )  # (big)x2
 
-        point_sets = [ ]  # these will be [N, 2] matrices of index points
-        neighbour_funcs = [ ]  # these will be functions for getting the neighbour index
+        point_sets = []  # these will be [N, 2] matrices of index points
+        neighbour_funcs = []  # these will be functions for getting the neighbour index
 
         # add sets
         point_sets.append(point_set[point_set[:, 0] > 0])  # x > 0
-        neighbour_funcs.append([lambda x: x-1, lambda y: y])
+        neighbour_funcs.append([lambda x: x - 1, lambda y: y])
 
         point_sets.append(point_set[point_set[:, 1] > 0])  # y > 0
-        neighbour_funcs.append([lambda x: x, lambda y: y-1])
+        neighbour_funcs.append([lambda x: x, lambda y: y - 1])
 
-        point_sets.append(point_set[point_set[:, 0] < xsize-1])  # x < xsize-1
-        neighbour_funcs.append([lambda x: x+1, lambda y: y])
+        point_sets.append(point_set[point_set[:, 0] < xsize - 1])  # x < xsize-1
+        neighbour_funcs.append([lambda x: x + 1, lambda y: y])
 
-        point_sets.append(point_set[point_set[:, 1] < ysize-1])  # y < ysize-1
-        neighbour_funcs.append([lambda x: x, lambda y: y+1])
-        
+        point_sets.append(point_set[point_set[:, 1] < ysize - 1])  # y < ysize-1
+        neighbour_funcs.append([lambda x: x, lambda y: y + 1])
+
         if use_diagonals:
-            point_sets.append(point_set[torch.logical_and(point_set[:,0] > 0, point_set[:,1] > 0)])
-            neighbour_funcs.append([lambda x: x-1, lambda y: y-1])
+            point_sets.append(point_set[torch.logical_and(point_set[:, 0] > 0, point_set[:, 1] > 0)])
+            neighbour_funcs.append([lambda x: x - 1, lambda y: y - 1])
 
-            point_sets.append(point_set[torch.logical_and(point_set[:,0] < xsize-1, point_set[:,1] > 0)])
-            neighbour_funcs.append([lambda x: x+1, lambda y: y-1])       
-        
+            point_sets.append(point_set[torch.logical_and(point_set[:, 0] < xsize - 1, point_set[:, 1] > 0)])
+            neighbour_funcs.append([lambda x: x + 1, lambda y: y - 1])
+
         t = torch.linspace(0, 1, 2)
         for ps, nf in zip(point_sets, neighbour_funcs):
-            for i in range(ceil(ps.shape[0]  / batch_size)):
-                x = ps[batch_size*i:batch_size*(i+1), 0]
-                y = ps[batch_size*i:batch_size*(i+1), 1]
+            for i in range(ceil(ps.shape[0] / batch_size)):
+                x = ps[batch_size * i:batch_size * (i + 1), 0]
+                y = ps[batch_size * i:batch_size * (i + 1), 1]
                 xn = nf[0](x); yn = nf[1](y)
-                
+
                 bs = x.shape[0]  # may be different from batch size for the last batch
 
                 line = CubicSpline(begin=torch.zeros(bs, dim), end=torch.ones(bs, dim), num_nodes=2)
                 line.begin = torch.cat([grid[0][x].view(-1, 1), grid[1][y].view(-1, 1)], dim=1)  # (bs)x2
                 line.end = torch.cat([grid[0][xn].view(-1, 1), grid[1][yn].view(-1, 1)], dim=1)  # (bs)x2
 
-                #if external_curve_length_function:
-                #    weight = external_curve_length_function(model, line(t))
-                #else:
+                # if external_curve_length_function:
+                #     weight = external_curve_length_function(model, line(t))
+                # else:
                 with torch.no_grad():
                     weight = model.curve_length(line(t))
 
@@ -123,23 +122,23 @@ class DiscretizedManifold(Manifold):
                 for x in range(xsize):
                     for y in range(ysize):
                         p = torch.tensor([self.grid[0][x], self.grid[1][y]])
-                        Mlist.append(model.metric(p)) # 1x(d)x(d) or 1x(d)
-            M = torch.cat(Mlist, dim=0) # (big)x(d)x(d) or (big)x(d)
+                        Mlist.append(model.metric(p))  # 1x(d)x(d) or 1x(d)
+            M = torch.cat(Mlist, dim=0)  # (big)x(d)x(d) or (big)x(d)
             self._diagonal_metric = M.dim() == 2
             d = M.shape[-1]
             if self._diagonal_metric:
-                self.__metric__ = M.view([*self.grid_size, d]) # e.g. (xsize)x(ysize)x(d)
+                self.__metric__ = M.view([*self.grid_size, d])  # e.g. (xsize)x(ysize)x(d)
             else:
-                self.__metric__ = M.view([*self.grid_size, d, d]) # e.g. (xsize)x(ysize)x(d)x(d)
-            
+                self.__metric__ = M.view([*self.grid_size, d, d])  # e.g. (xsize)x(ysize)x(d)x(d)
+
             # Compute interpolation weights. We use the mean function of a GP regressor.
             mesh = torch.meshgrid(*self.grid, indexing='ij')
-            grid_points =  torch.cat([m.unsqueeze(-1) for m in mesh], dim=-1) # e.g. 100x100x2 a 2D grid with 100 points in each dim
-            K = self._kernel(grid_points.view(-1, len(self.grid))) # (num_grid)x(num_grid)
+            grid_points = torch.cat([m.unsqueeze(-1) for m in mesh], dim=-1)  # e.g. 100x100x2 a 2D grid with 100 points in each dim
+            K = self._kernel(grid_points.view(-1, len(self.grid)))  # (num_grid)x(num_grid)
             if interpolation_noise > 0.0:
                 K += interpolation_noise * torch.eye(K.shape[0])
             num_grid = K.shape[0]
-            self._alpha = torch.linalg.solve(K, self.__metric__.view(num_grid, -1)) # (num_grid)x(d²) or (num_grid)x(d)
+            self._alpha = torch.linalg.solve(K, self.__metric__.view(num_grid, -1))  # (num_grid)x(d²) or (num_grid)x(d)
         except:
             import warnings
             warnings.warn("It appears that your model does not implement a metric.")
@@ -169,10 +168,10 @@ class DiscretizedManifold(Manifold):
                         a (d)x(d) diagonal matrix.
         """
         # XXX: We should also support returning the derivative of the metric! (for ODEs; see local_PCA)
-        K = self._kernel(points) # Nx(num_grid)
-        M = K.mm(self._alpha) # Nx(d²) or Nx(d)
+        K = self._kernel(points)  # Nx(num_grid)
+        M = K.mm(self._alpha)  # Nx(d²) or Nx(d)
         if not self._diagonal_metric:
-            d = len(grid)
+            d = len(self.grid)
             M = M.view(-1, d, d)
         return M
 
@@ -198,16 +197,16 @@ class DiscretizedManifold(Manifold):
 
         Input:
             p:      a torch Tensor corresponding to a point on the manifold.
-        
+
         Output:
             val:    a torch Tensor with the kernel values.
         """
-        lengthscales = [(g[1]-g[0])**2 for g in self.grid]
+        lengthscales = [(g[1] - g[0])**2 for g in self.grid]
 
         dist2 = torch.zeros(p.shape[0], self.G.number_of_nodes())
         mesh = torch.meshgrid(*self.grid, indexing='ij')
         for mesh_dim, dim in zip(mesh, range(len(self.grid))):
-            dist2 += (p[:, dim].view(-1, 1) - mesh_dim.reshape(1, -1))**2/lengthscales[dim]
+            dist2 += (p[:, dim].view(-1, 1) - mesh_dim.reshape(1, -1))**2 / lengthscales[dim]
 
         return torch.exp(-dist2)
 
@@ -216,7 +215,7 @@ class DiscretizedManifold(Manifold):
 
         Input:
             p:      a torch Tensor corresponding to a latent point.
-        
+
         Output:
             idx:    an integer correponding to the node index of
                     the nearest point on the grid.
@@ -230,7 +229,7 @@ class DiscretizedManifold(Manifold):
             p1:     a torch Tensor corresponding to one latent point.
 
             p2:     a torch Tensor corresponding to another latent point.
-        
+
         Outputs:
             curve:  a DiscreteCurve forming the shortest path from p1 to p2.
 
@@ -238,21 +237,21 @@ class DiscretizedManifold(Manifold):
         """
         idx1 = self._grid_point(p1)
         idx2 = self._grid_point(p2)
-        path = nx.shortest_path(self.G, source=idx1, target=idx2, weight='weight') # list with N elements
-        #coordinates = self.grid.view(self.grid.shape[0], -1)[:, path] # (dim)xN
+        path = nx.shortest_path(self.G, source=idx1, target=idx2, weight='weight')  # list with N elements
+        # coordinates = self.grid.view(self.grid.shape[0], -1)[:, path] # (dim)xN
         mesh = torch.meshgrid(*self.grid, indexing='ij')
         raw_coordinates = [m.flatten()[path].view(1, -1) for m in mesh]
-        coordinates = torch.cat(raw_coordinates, dim=0) # (dim)xN
+        coordinates = torch.cat(raw_coordinates, dim=0)  # (dim)xN
         N = len(path)
         curve = DiscreteCurve(begin=coordinates[:, 0], end=coordinates[:, -1], num_nodes=N)
         with torch.no_grad():
             curve.parameters[:, :] = coordinates[:, 1:-1].t()
         dist = 0
-        for i in range(N-1):
-            dist += self.G.edges[path[i], path[i+1]]['weight']
+        for i in range(N - 1):
+            dist += self.G.edges[path[i], path[i + 1]]['weight']
         return curve, dist
 
-    def connecting_geodesic(self, p1, p2, curve=None): 
+    def connecting_geodesic(self, p1, p2, curve=None):
         """Compute the shortest path on the discretized manifold and fit
         a smooth curve to the resulting discrete curve.
 
@@ -260,12 +259,12 @@ class DiscretizedManifold(Manifold):
             p1:     a torch Tensor corresponding to one latent point.
 
             p2:     a torch Tensor corresponding to another latent point.
-        
+
         Optional input:
             curve:  a curve that should be fitted to the discrete graph
                     geodesic. By default this is None and a CubicSpline
                     with default paramaters will be constructed.
-        
+
         Outputs:
             curve:  a smooth curve forming the shortest path from p1 to p2.
                     By default the curve is a CubicSpline with its default
@@ -275,13 +274,13 @@ class DiscretizedManifold(Manifold):
         device = p1.device
         idx1 = self._grid_point(p1)
         idx2 = self._grid_point(p2)
-        path = nx.shortest_path(self.G, source=idx1, target=idx2, weight='weight') # list with N elements
-        weights = [self.G.edges[path[k], path[k+1]]['weight'] for k in range(len(path)-1)]
+        path = nx.shortest_path(self.G, source=idx1, target=idx2, weight='weight')  # list with N elements
+        weights = [self.G.edges[path[k], path[k + 1]]['weight'] for k in range(len(path) - 1)]
         mesh = torch.meshgrid(*self.grid, indexing='ij')
         raw_coordinates = [m.flatten()[path[1:-1]].view(-1, 1) for m in mesh]
-        coordinates = torch.cat(raw_coordinates, dim=1) # Nx(dim)
+        coordinates = torch.cat(raw_coordinates, dim=1)  # Nx(dim)
         t = torch.tensor(weights[:-1], device=device).cumsum(dim=0) / sum(weights)
-        
+
         if curve is None:
             curve = CubicSpline(p1, p2)
         else:

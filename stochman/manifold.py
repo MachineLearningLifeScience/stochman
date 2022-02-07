@@ -43,7 +43,7 @@ class Manifold(ABC):
         d = curve.shape[2]
         delta = curve[:, 1:] - curve[:, :-1]  # Bx(N-1)x(d)
         flat_delta = delta.view(-1, d)  # (B*(N-1))x(d)
-        energy = self.inner(curve[:, :-1].view(-1, d), flat_delta, flat_delta)  # B*(N-1)
+        energy = self.inner(curve[:, :-1].reshape(-1, d), flat_delta, flat_delta)  # B*(N-1)
         return energy.sum()  # scalar
 
     def curve_length(self, curve: BasicCurve) -> torch.Tensor:
@@ -70,7 +70,7 @@ class Manifold(ABC):
         B, N, d = curve.shape
         delta = curve[:, 1:] - curve[:, :-1]  # Bx(N-1)x(d)
         flat_delta = delta.view(-1, d)  # (B*(N-1))x(d)
-        energy = self.inner(curve[:, :-1].view(-1, d), flat_delta, flat_delta)  # B*(N-1)
+        energy = self.inner(curve[:, :-1].reshape(-1, d), flat_delta, flat_delta)  # B*(N-1)
         length = energy.view(B, N - 1).sqrt().sum(dim=1)  # B
         return length
 
@@ -591,44 +591,6 @@ class LocalVarMetric(Manifold):
             return torch.cat(M), torch.cat(dMdc, dim=0)
         else:
             return torch.cat(M)
-
-    def curve_energy(self, c):
-        """
-        Evaluate the energy of a curve represented as a discrete set of points.
-
-        Input:
-            c:      A discrete set of points along a curve. This is represented
-                    as a PxD or BxPxD torch Tensor. The points are assumed to be ordered
-                    along the curve and evaluated at equidistant time points.
-
-        Output:
-            energy: The energy of the input curve.
-        """
-        if len(c.shape) == 2:
-            c.unsqueeze_(0)  # add batch dimension if one isn't present
-        energy = torch.zeros(1)
-        for b in range(c.shape[0]):
-            M = self.metric(c[b, :-1])  # (P-1)xD
-            delta1 = (c[b, 1:] - c[b, :-1]) ** 2  # (P-1)xD
-            energy += (M * delta1).sum()
-        return energy
-
-    def curve_length(self, c):
-        """
-        Evaluate the length of a curve represented as a discrete set of points.
-
-        Input:
-            c:      A discrete set of points along a curve. This is represented
-                    as a PxD torch Tensor. The points are assumed to be ordered
-                    along the curve and evaluated at equidistant indices.
-
-        Output:
-            length: The length of the input curve.
-        """
-        M = self.metric(c[:-1])  # (P-1)xD
-        delta1 = (c[1:] - c[:-1]) ** 2  # (P-1)xD
-        length = (M * delta1).sum(dim=1).sqrt().sum()
-        return length
 
     def geodesic_system(self, c, dc):
         """

@@ -95,7 +95,7 @@ class DiscretizedManifold(Manifold):
             for i in range(ceil(ps.shape[0] / batch_size)):
                 x = ps[batch_size * i:batch_size * (i + 1), 0]
                 y = ps[batch_size * i:batch_size * (i + 1), 1]
-                xn = nf[0](x); yn = nf[1](y)
+                xn, yn = nf[0](x), nf[1](y)
 
                 bs = x.shape[0]  # may be different from batch size for the last batch
 
@@ -133,12 +133,16 @@ class DiscretizedManifold(Manifold):
 
             # Compute interpolation weights. We use the mean function of a GP regressor.
             mesh = torch.meshgrid(*self.grid, indexing='ij')
-            grid_points = torch.cat([m.unsqueeze(-1) for m in mesh], dim=-1)  # e.g. 100x100x2 a 2D grid with 100 points in each dim
+            grid_points = torch.cat(
+                [m.unsqueeze(-1) for m in mesh], dim=-1
+            )  # e.g. 100x100x2 a 2D grid with 100 points in each dim
             K = self._kernel(grid_points.view(-1, len(self.grid)))  # (num_grid)x(num_grid)
             if interpolation_noise > 0.0:
                 K += interpolation_noise * torch.eye(K.shape[0])
             num_grid = K.shape[0]
-            self._alpha = torch.linalg.solve(K, self.__metric__.view(num_grid, -1))  # (num_grid)x(d²) or (num_grid)x(d)
+            self._alpha = torch.linalg.solve(
+                K, self.__metric__.view(num_grid, -1)
+            )  # (num_grid)x(d²) or (num_grid)x(d)
         except:
             import warnings
             warnings.warn("It appears that your model does not implement a metric.")
@@ -187,7 +191,7 @@ class DiscretizedManifold(Manifold):
         """
 
         dist2 = torch.zeros(p.shape[0], self.G.number_of_nodes())
-        mesh = torch.meshgrid(*self.grid, indexing='ij')  # XXX: IT MUST BE POSSIBLE TO AVOID THIS GRID CONSTRUCTION
+        mesh = torch.meshgrid(*self.grid, indexing='ij')
         for mesh_dim, dim in zip(mesh, range(len(self.grid))):
             dist2 += (p[:, dim].view(-1, 1) - mesh_dim.reshape(1, -1))**2
         return dist2

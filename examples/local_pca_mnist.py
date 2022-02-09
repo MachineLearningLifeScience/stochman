@@ -9,7 +9,7 @@ import stochman
 
 def get_subset_mnist(n: int = 1000):
     dataset = MNIST(root="", download=True)
-    data = dataset.data[dataset.targets==1]
+    data = dataset.data[dataset.targets == 1]
     N = data.shape[0]
     idx = np.random.choice(np.arange(N), size=n)
     return data[idx]

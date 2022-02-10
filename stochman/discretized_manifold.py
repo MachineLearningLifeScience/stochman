@@ -293,4 +293,4 @@ class DiscretizedManifold(Manifold):
 
         curve.fit(t, coordinates)
 
-        return curve
+        return curve, True

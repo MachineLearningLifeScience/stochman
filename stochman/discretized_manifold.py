@@ -277,9 +277,9 @@ class DiscretizedManifold(Manifold):
         """
         device = p1.device
         if p1.ndim == 1:
-            p1 = p1.unsqueeze(0) # 1xD
+            p1 = p1.unsqueeze(0)  # 1xD
         if p2.ndim == 1:
-            p2 = p2.unsqueeze(0) # 1xD
+            p2 = p2.unsqueeze(0)  # 1xD
         B = p1.shape[0]
         if p1.shape != p2.shape:
             raise NameError('shape mismatch')

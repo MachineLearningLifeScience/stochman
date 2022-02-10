@@ -285,7 +285,7 @@ class DiscretizedManifold(Manifold):
             raise NameError('shape mismatch')
 
         if curve is None:
-            curve = CubicSpline(p1, p2)
+            curve = CubicSpline(p1.detach(), p2.detach())
         else:
             curve.begin = p1
             curve.end = p2

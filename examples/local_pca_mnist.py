@@ -64,7 +64,7 @@ plt.plot(data[:, 0], data[:, 1], "w.", markersize=1)
 for k in range(10):
     p0 = data[torch.randint(high=N, size=[1], dtype=torch.long)]  # 1xD
     p1 = data[torch.randint(high=N, size=[1], dtype=torch.long)]  # 1xD
-    C = DM.connecting_geodesic(p0, p1)
+    C, _ = DM.connecting_geodesic(p0, p1)
     C.plot()
 
 # p = C.begin

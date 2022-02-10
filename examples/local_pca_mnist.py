@@ -61,11 +61,10 @@ XY2 = torch.stack((X2.flatten(), Y2.flatten()), dim=1)  # 10000x2
 DMim = DM.metric(XY2).log().sum(dim=1).view(133, 133).t()
 plt.imshow(DMim, extent=(ran[0], ran[-1], ran[0], ran[-1]), origin="lower")
 plt.plot(data[:, 0], data[:, 1], "w.", markersize=1)
-for k in range(10):
-    p0 = data[torch.randint(high=N, size=[1], dtype=torch.long)]  # 1xD
-    p1 = data[torch.randint(high=N, size=[1], dtype=torch.long)]  # 1xD
-    C, _ = DM.connecting_geodesic(p0, p1)
-    C.plot()
+p0 = data[torch.randint(high=N, size=[10], dtype=torch.long)]  # 10xD
+p1 = data[torch.randint(high=N, size=[10], dtype=torch.long)]  # 10xD
+C, success = DM.connecting_geodesic(p0, p1)
+C.plot()
 
 # p = C.begin
 # with torch.no_grad():

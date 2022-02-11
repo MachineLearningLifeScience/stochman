@@ -137,7 +137,7 @@ class TestJacobian:
         """Test that the analytical jacobian of the model is consistent with finite
         order approximation
         """
-        if device == "cuda" and not torch.cuda.is_available():
+        if "cuda" in device and not torch.cuda.is_available():
             pytest.skip("Test requires cuda support")
 
         model = deepcopy(model).to(device=device, dtype=dtype).eval()
@@ -149,7 +149,7 @@ class TestJacobian:
     @pytest.mark.parametrize("return_jac", [True, False])
     def test_jac_return(self, model, input_shape, device, return_jac):
         """ Test that all models returns the jacobian output if asked for it """
-        if device == "cuda" and not torch.cuda.is_available():
+        if "cuda" in device and not torch.cuda.is_available():
             pytest.skip("Test requires cuda support")
 
         input = torch.randn(*input_shape, device=device)

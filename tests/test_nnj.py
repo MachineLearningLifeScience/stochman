@@ -1,11 +1,12 @@
 from copy import deepcopy
 from typing import Callable
 
-import numpy
 import pytest
 import torch
 
 from stochman import nnj
+
+_ = torch.manual_seed(42)
 
 _batch_size = 2
 _features = 5
@@ -144,7 +145,7 @@ class TestJacobian:
         input = torch.randn(*input_shape, device=device, dtype=dtype)
         _, jac = model(input, jacobian=True)
         jacnum = _compare_jacobian(model, input).to(device)
-        assert torch.isclose(jac, jacnum, atol=1e-5).all(), "jacobians did not match"
+        assert torch.isclose(jac, jacnum, atol=1e-4).all(), "jacobians did not match"
 
     @pytest.mark.parametrize("return_jac", [True, False])
     def test_jac_return(self, model, input_shape, device, return_jac):

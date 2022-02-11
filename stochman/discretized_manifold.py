@@ -285,20 +285,21 @@ class DiscretizedManifold(Manifold):
             raise NameError('shape mismatch')
 
         if curve is None:
-            curve = CubicSpline(p1.detach(), p2.detach())
+            curve = CubicSpline(p1, p2)
         else:
             curve.begin = p1
             curve.end = p2
 
         for b in range(B):
-            idx1 = self._grid_point(p1[b].unsqueeze(0))
-            idx2 = self._grid_point(p2[b].unsqueeze(0))
-            path = nx.shortest_path(self.G, source=idx1, target=idx2, weight='weight')  # list with N elements
-            weights = [self.G.edges[path[k], path[k + 1]]['weight'] for k in range(len(path) - 1)]
-            mesh = torch.meshgrid(*self.grid, indexing='ij')
-            raw_coordinates = [m.flatten()[path[1:-1]].view(-1, 1) for m in mesh]
-            coordinates = torch.cat(raw_coordinates, dim=1)  # Nx(dim)
-            t = torch.tensor(weights[:-1], device=device).cumsum(dim=0) / sum(weights)
+            with torch.no_grad():
+                idx1 = self._grid_point(p1[b].unsqueeze(0))
+                idx2 = self._grid_point(p2[b].unsqueeze(0))
+                path = nx.shortest_path(self.G, source=idx1, target=idx2, weight='weight')  # list with N elements
+                weights = [self.G.edges[path[k], path[k + 1]]['weight'] for k in range(len(path) - 1)]
+                mesh = torch.meshgrid(*self.grid, indexing='ij')
+                raw_coordinates = [m.flatten()[path[1:-1]].view(-1, 1) for m in mesh]
+                coordinates = torch.cat(raw_coordinates, dim=1)  # Nx(dim)
+                t = torch.tensor(weights[:-1], device=device).cumsum(dim=0) / sum(weights)
 
             curve[b].fit(t, coordinates)
 

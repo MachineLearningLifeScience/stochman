@@ -294,7 +294,9 @@ class DiscretizedManifold(Manifold):
             with torch.no_grad():
                 idx1 = self._grid_point(p1[b].unsqueeze(0))
                 idx2 = self._grid_point(p2[b].unsqueeze(0))
-                path = nx.shortest_path(self.G, source=idx1, target=idx2, weight='weight')  # list with N elements
+                path = nx.shortest_path(
+                    self.G, source=idx1, target=idx2, weight='weight'
+                )  # list with N elements
                 weights = [self.G.edges[path[k], path[k + 1]]['weight'] for k in range(len(path) - 1)]
                 mesh = torch.meshgrid(*self.grid, indexing='ij')
                 raw_coordinates = [m.flatten()[path[1:-1]].view(-1, 1) for m in mesh]

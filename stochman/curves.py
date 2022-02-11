@@ -436,7 +436,7 @@ class CubicSpline(BasicCurve):
             if t.dim() == 1:
                 t = t.expand(coeffs.shape[0], -1)  # Bx|t|
             # evaluate the derivative spline
-            retval = self.__ppeval__(t, dcoeffs)  # Bx|t|xD
+            retval = self._eval_polynomials(t, dcoeffs)  # Bx|t|xD
             # tt = t.view((-1, 1)) # |t|x1
             retval += delta.unsqueeze(1)
         return retval

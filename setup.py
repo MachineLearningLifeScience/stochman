@@ -50,7 +50,7 @@ setup(
     packages=find_packages(exclude=["tests", "tests/*"]),
     python_requires=">=3.6",
     install_requires=requirements,
-    download_url="https://github.com/CenterBioML/stochman/archive/0.1.0.zip",
+    download_url="https://github.com/CenterBioML/stochman/archive/0.2.0.zip",
     classifiers=[
         "Environment :: Console",
         "Natural Language :: English",

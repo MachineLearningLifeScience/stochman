@@ -8,7 +8,7 @@ import time
 # fmt: off
 __name__ = "stochman"
 _this_year = time.strftime("%Y")
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 __author__ = "Nicki Skafte Detlefsen et al."
 __author_email__ = "nsde@dtu.dk"
 __license__ = "Apache-2.0"

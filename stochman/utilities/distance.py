@@ -46,4 +46,4 @@ def squared_manifold_distance(manifold, p0: torch.Tensor, p1: torch.Tensor):
         dist: squared distance from p0 to p1 calculated on the manifold
     """
     distance_op = __Dist2__()
-    return distance_op(manifold, p0, p1)
+    return distance_op.apply(manifold, p0, p1)

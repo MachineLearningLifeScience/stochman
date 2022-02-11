@@ -29,5 +29,6 @@ jobs:
         twine check dist/*
     - name: Test with pytest
       run: |
-        pip install pytest
-        pytest -v
+        pip install pytest coverage
+        coverage run -m pytest tests/ -vv
+        coverage report -m

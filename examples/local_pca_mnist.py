@@ -34,7 +34,7 @@ M = stochman.manifold.LocalVarMetric(data=data, sigma=sigma, rho=rho)
 # Plot metric and data
 plt.figure()
 ran = torch.linspace(-3.0, 3.0, 100)
-X, Y = torch.meshgrid([ran, ran], indexing='ij')
+X, Y = torch.meshgrid([ran, ran], indexing="ij")
 XY = torch.stack((X.flatten(), Y.flatten()), dim=1)  # 10000x2
 gridM = M.metric(XY)  # 10000x2
 Mim = gridM.sum(dim=1).reshape((100, 100)).detach().t()
@@ -56,7 +56,7 @@ DM.fit(M, [ran, ran], batch_size=100)
 # Compute discretized geodesics
 plt.figure()
 ran2 = torch.linspace(-3.0, 3.0, 133)
-X2, Y2 = torch.meshgrid([ran2, ran2], indexing='ij')
+X2, Y2 = torch.meshgrid([ran2, ran2], indexing="ij")
 XY2 = torch.stack((X2.flatten(), Y2.flatten()), dim=1)  # 10000x2
 DMim = DM.metric(XY2).log().sum(dim=1).view(133, 133).t()
 plt.imshow(DMim, extent=(ran[0], ran[-1], ran[0], ran[-1]), origin="lower")

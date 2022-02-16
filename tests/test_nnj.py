@@ -56,6 +56,7 @@ def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
         (nnj.Sequential(nnj.Linear(_features, 2), nnj.OneMinusX()), _linear_input_shape),
         (nnj.Sequential(nnj.Linear(_features, 2), nnj.PReLU()), _linear_input_shape),
         (nnj.Sequential(nnj.Linear(_features, 2), nnj.Softmax(dim=-1)), _linear_input_shape),
+        (nnj.Sequential(nnj.Linear(_features, 2), nnj.PReLU()), _linear_input_shape),
         (
             nnj.Sequential(nnj.Conv1d(_features, 2, 5), nnj.ConvTranspose1d(2, _features, 5)),
             _1d_conv_input_shape,
@@ -145,7 +146,7 @@ class TestJacobian:
         input = torch.randn(*input_shape, device=device, dtype=dtype)
         _, jac = model(input, jacobian=True)
         jacnum = _compare_jacobian(model, input).to(device)
-        assert torch.isclose(jac, jacnum, atol=1e-4).all(), "jacobians did not match"
+        assert torch.isclose(jac, jacnum, atol=1e-3).all(), "jacobians did not match"
 
     @pytest.mark.parametrize("return_jac", [True, False])
     def test_jac_return(self, model, input_shape, device, return_jac):

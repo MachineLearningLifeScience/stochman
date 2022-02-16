@@ -319,6 +319,14 @@ class ReLU(AbstractActivationJacobian, nn.ReLU):
         return jac
 
 
+class PReLU(AbstractActivationJacobian, nn.PReLU):
+    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
+        jac = (val >= 0.0).type(val.dtype) + (val < 0.0).type(val.dtype) * self.weight.reshape(
+            (1, self.num_parameters) + (1,) * (val.ndim - 2)
+        )
+        return jac
+
+
 class ELU(AbstractActivationJacobian, nn.ELU):
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = torch.ones_like(val)
@@ -337,13 +345,6 @@ class Hardtanh(AbstractActivationJacobian, nn.Hardtanh):
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = torch.zeros_like(val)
         jac[val.abs() < 1.0] = 1.0
-        return jac
-
-
-class PReLU(AbstractActivationJacobian, nn.PReLU):
-    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
-        jac = torch.ones_like(val)
-        jac[x < 0.0] = self.weight
         return jac
 
 

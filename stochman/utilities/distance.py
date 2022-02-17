@@ -7,31 +7,36 @@ class __Dist2__(torch.autograd.Function):
     def forward(ctx, M, p0: torch.Tensor, p1: torch.Tensor):
         with torch.no_grad():
             with torch.enable_grad():
-                # TODO: Only perform the computations needed for backpropagation
-                # (check if p0.requires_grad and p1.requires_grad)
                 C, success = M.connecting_geodesic(p0, p1)
+            C.constant_speed(M)
+            dist = M.curve_length(C(torch.linspace(0, 1, 100)))  # B
+            dist2 = dist**2
 
-                lm0 = C.deriv(torch.zeros(1, device=p0.device)).squeeze(1)  # log(p0, p1); Bx(d)
-                lm1 = -C.deriv(torch.ones(1, device=p0.device)).squeeze(1)   # log(p1, p0); Bx(d)
-                M0 = M.metric(p0)  # Bx(d)x(d) or Bx(d)
-                M1 = M.metric(p1)  # Bx(d)x(d) or Bx(d)
-                if M0.ndim == 3:  # metric is square
-                    Mlm0 = M0.bmm(lm0.unsqueeze(-1)).squeeze(-1)  # Bx(d)
-                    Mlm1 = M1.bmm(lm1.unsqueeze(-1)).squeeze(-1)  # Bx(d)
-                else:
-                    Mlm0 = M0 * lm0  # Bx(d)
-                    Mlm1 = M1 * lm1  # Bx(d)
+            lm0 = C.deriv(torch.zeros(1, device=p0.device)).squeeze(1)  # log(p0, p1); Bx(d)
+            lm1 = -C.deriv(torch.ones(1, device=p0.device)).squeeze(1)   # log(p1, p0); Bx(d)
+            G0 = M.metric(p0)  # Bx(d)x(d) or Bx(d)
+            G1 = M.metric(p1)  # Bx(d)x(d) or Bx(d)
+            if G0.ndim == 3:  # metric is square
+                Glm0 = G0.bmm(lm0.unsqueeze(-1)).squeeze(-1)  # Bx(d)
+                Glm1 = G1.bmm(lm1.unsqueeze(-1)).squeeze(-1)  # Bx(d)
+            else:
+                Glm0 = G0 * lm0  # Bx(d)
+                Glm1 = G1 * lm1  # Bx(d)
 
-                ctx.save_for_backward(Mlm0, Mlm1)
-                retval = (lm0 * Mlm0).sum(dim=-1)  # B
-        return retval
+            length_from_log = (lm0 * Glm0).sum(dim=-1)  # B
+            alpha = (dist2 / length_from_log).sqrt().unsqueeze(1)  # Bx1
+            Glm0 *= alpha
+            Glm1 *= alpha
+
+            ctx.save_for_backward(Glm0, Glm1)
+        return dist2
 
     @staticmethod
     def backward(ctx, grad_output):
-        Mlm0, Mlm1 = ctx.saved_tensors
+        Glm0, Glm1 = ctx.saved_tensors
         return (None,
-                2.0 * grad_output.view(-1, 1) * Mlm0,
-                2.0 * grad_output.view(-1, 1) * Mlm1)
+                2.0 * grad_output.view(-1, 1) * Glm0,
+                2.0 * grad_output.view(-1, 1) * Glm1)
 
 
 def squared_manifold_distance(manifold, p0: torch.Tensor, p1: torch.Tensor):

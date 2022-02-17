@@ -107,11 +107,13 @@ class TestCurves:
         begin = torch.randn(batch_size, dim)
         end = torch.randn(batch_size, dim)
         c = curve_class(begin, end, 20)
-        new_t, Ct = c.constant_speed(t=torch.linspace(0, 1, timesteps))
+        new_t, Ct, curve_length = c.constant_speed(t=torch.linspace(0, 1, timesteps))
         assert isinstance(new_t, torch.Tensor)
         assert isinstance(Ct, torch.Tensor)
+        assert isinstance(curve_length, torch.Tensor)
         assert new_t.shape == (batch_size, timesteps)
         assert Ct.shape == (batch_size, timesteps, dim)
+        assert curve_length.shape == (batch_size, )
 
     def test_plotting_in_axis(self, curve_class):
         batch_size = 5

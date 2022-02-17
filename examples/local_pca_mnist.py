@@ -66,6 +66,11 @@ p1 = data[torch.randint(high=N, size=[10], dtype=torch.long)]  # 10xD
 C, success = DM.connecting_geodesic(p0, p1)
 C.plot()
 
+t = torch.linspace(0, 1, 100)
+with torch.no_grad():
+    print(DM.curve_length(C(t)))
+    print(DM.dist2(p0, p1).sqrt())
+
 # p = C.begin
 # with torch.no_grad():
 #     v = C.deriv(torch.zeros(1))

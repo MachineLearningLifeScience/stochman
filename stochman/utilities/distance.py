@@ -8,8 +8,7 @@ class __Dist2__(torch.autograd.Function):
         with torch.no_grad():
             with torch.enable_grad():
                 C, success = M.connecting_geodesic(p0, p1)
-            C.constant_speed(M)
-            dist = M.curve_length(C(torch.linspace(0, 1, 100)))  # B
+            _, _, dist = C.constant_speed(M)  # B
             dist2 = dist**2
 
             lm0 = C.deriv(torch.zeros(1, device=p0.device)).squeeze(1)  # log(p0, p1); Bx(d)

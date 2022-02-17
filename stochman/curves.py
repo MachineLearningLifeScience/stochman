@@ -234,7 +234,7 @@ class DiscreteCurve(BasicCurve):
 
     def constant_speed(
         self, metric=None, t: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Reparametrize the curve to have constant speed.
 
@@ -271,7 +271,7 @@ class DiscreteCurve(BasicCurve):
             _ = S.fit(new_t, t.unsqueeze(0).expand(B, -1).unsqueeze(2))
             new_params = self(S(self.t[:, :, 0]).squeeze(-1))  # Bx(num_nodes-2)xD
             self.params = nn.Parameter(new_params)
-            return new_t, Ct
+            return new_t, Ct, local_len.sum(dim=1)
 
     def tospline(self):
         from stochman import CubicSpline

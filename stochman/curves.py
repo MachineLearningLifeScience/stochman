@@ -443,7 +443,7 @@ class CubicSpline(BasicCurve):
 
     def constant_speed(
         self, metric=None, t: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Reparametrize the curve to have constant speed.
 

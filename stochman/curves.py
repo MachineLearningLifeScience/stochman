@@ -473,7 +473,7 @@ class CubicSpline(BasicCurve):
             cs = local_len.cumsum(dim=1)  # Bx(N-1)
             new_t = torch.cat((torch.zeros(B, 1), cs / cs[:, -1].unsqueeze(1)), dim=1)  # BxN
             _ = self.fit(new_t, Ct)
-            return new_t, Ct
+            return new_t, Ct, local_len.sum(dim=1)
 
     def todiscrete(self, num_nodes=None):
         from stochman import DiscreteCurve

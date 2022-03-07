@@ -21,16 +21,32 @@ class BasicCurve(ABC, nn.Module):
         self._num_nodes = num_nodes
         self._requires_grad = requires_grad
 
-        # register begin and end as buffers
-        if len(begin.shape) == 1 or begin.shape[0] == 1:
-            self.register_buffer("begin", begin.detach().view((1, -1)))  # 1xD
+        # if either begin or end only has one point, while the other has a batch
+        # then we expand the singular point. End result is that both begin and
+        # end should have shape BxD
+        batch_begin = 1 if len(begin.shape) == 1 else begin.shape[0]
+        batch_end = 1 if len(end.shape) == 1 else end.shape[0]
+        if batch_begin == 1 and batch_end == 1:
+            _begin = begin.detach().view((1, -1))  # 1xD
+            _end = end.detach().view((1, -1))  # 1xD
+        elif batch_begin == 1:  # batch_end > 1
+            _begin = begin.detach().view((1, -1)).repeat(batch_end, 1)  # BxD
+            _end = end.detach()  # BxD
+        elif batch_end == 1:  # batch_begin > 1
+            _begin = begin.detach()  # BxD
+            _end = end.detach().view((1, -1)).repeat(batch_begin, 1)  # BxD
+        elif batch_begin == batch_end:
+            _begin = begin.detach()  # BxD
+            _end = end.detach()  # BxD
         else:
-            self.register_buffer("begin", begin.detach())  # BxD
+            raise ValueError(
+                "BasicCurve.__init__ requires begin and end points to have "
+                "the same shape"
+            )
 
-        if len(end.shape) == 1 or end.shape[0] == 1:
-            self.register_buffer("end", end.detach().view((1, -1)))  # 1xD
-        else:
-            self.register_buffer("end", end.detach())  # BxD
+        # register begin and end as buffers
+        self.register_buffer("begin", _begin)  # BxD
+        self.register_buffer("end", _end)  # BxD
 
         # overriden by child modules
         self._init_params(*args, **kwargs)

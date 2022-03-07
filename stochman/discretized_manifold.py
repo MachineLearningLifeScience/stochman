@@ -225,6 +225,8 @@ class DiscretizedManifold(Manifold):
             idx:    an integer correponding to the node index of
                     the nearest point on the grid.
         """
+        if p.ndim == 1:
+            p = p.unsqueeze(0)
         return self._grid_dist2(p).argmin().item()
 
     def shortest_path(self, p1, p2):
@@ -256,6 +258,14 @@ class DiscretizedManifold(Manifold):
             dist += self.G.edges[path[i], path[i + 1]]["weight"]
         return curve, dist
 
+    def _path_to_curve(self, path, mesh, curve, device=None):
+        weights = [self.G.edges[path[k], path[k + 1]]["weight"] for k in range(len(path) - 1)]
+        raw_coordinates = [m.flatten()[path[1:-1]].view(-1, 1) for m in mesh]
+        coordinates = torch.cat(raw_coordinates, dim=1)  # Nx(dim)
+        t = torch.tensor(weights[:-1], device=device).cumsum(dim=0) / sum(weights)
+
+        curve.fit(t, coordinates)
+
     def connecting_geodesic(self, p1, p2, curve=None):
         """Compute the shortest path on the discretized manifold and fit
         a smooth curve to the resulting discrete curve.
@@ -277,13 +287,15 @@ class DiscretizedManifold(Manifold):
                     curve input.
         """
         device = p1.device
-        if p1.ndim == 1:
-            p1 = p1.unsqueeze(0)  # 1xD
-        if p2.ndim == 1:
-            p2 = p2.unsqueeze(0)  # 1xD
-        B = p1.shape[0]
-        if p1.shape != p2.shape:
-            raise NameError("shape mismatch")
+        batch1 = 1 if len(p1.shape) == 1 else p1.shape[0]
+        batch2 = 1 if len(p2.shape) == 1 else p2.shape[0]
+        B = max(batch1, batch2)
+        if batch1 == 1:
+            p1 = p1.view((1, -1))  # 1xD
+        if batch2 == 1:
+            p2 = p2.view((1, -1))  # 1xD
+
+        single_source = min(batch1, batch2) == 1 and B > 1
 
         if curve is None:
             curve = CubicSpline(p1, p2)
@@ -291,19 +303,31 @@ class DiscretizedManifold(Manifold):
             curve.begin = p1
             curve.end = p2
 
-        for b in range(B):
+        mesh = torch.meshgrid(*self.grid, indexing="ij")
+
+        if single_source:
             with torch.no_grad():
-                idx1 = self._grid_point(p1[b].unsqueeze(0))
-                idx2 = self._grid_point(p2[b].unsqueeze(0))
+                if batch1 == 1:
+                    source_idx = self._grid_point(p1)
+                else:
+                    source_idx = self._grid_point(p2)
+            paths = nx.single_source_dijkstra_path(
+                self.G, source=source_idx, weight="weight"
+            )  # list of lists
+            for b in range(B):
+                if batch1 == 1:
+                    idx = self._grid_point(p2[b])
+                else:
+                    idx = self._grid_point(p1[b])
+                self._path_to_curve(paths[idx], mesh, curve[b], device)
+        else:
+            for b in range(B):
+                with torch.no_grad():
+                    idx1 = self._grid_point(p1[b])
+                    idx2 = self._grid_point(p2[b])
                 path = nx.shortest_path(
                     self.G, source=idx1, target=idx2, weight="weight"
                 )  # list with N elements
-                weights = [self.G.edges[path[k], path[k + 1]]["weight"] for k in range(len(path) - 1)]
-                mesh = torch.meshgrid(*self.grid, indexing="ij")
-                raw_coordinates = [m.flatten()[path[1:-1]].view(-1, 1) for m in mesh]
-                coordinates = torch.cat(raw_coordinates, dim=1)  # Nx(dim)
-                t = torch.tensor(weights[:-1], device=device).cumsum(dim=0) / sum(weights)
-
-            curve[b].fit(t, coordinates)
+                self._path_to_curve(path, mesh, curve[b], device)
 
         return curve, True

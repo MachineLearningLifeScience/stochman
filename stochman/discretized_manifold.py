@@ -266,7 +266,7 @@ class DiscretizedManifold(Manifold):
 
         curve.fit(t, coordinates)
 
-    def connecting_geodesic(self, p1, p2, curve=None):
+    def connecting_geodesic(self, p1, p2, init_curve=None):
         """Compute the shortest path on the discretized manifold and fit
         a smooth curve to the resulting discrete curve.
 
@@ -276,7 +276,8 @@ class DiscretizedManifold(Manifold):
             p2:     a torch Tensor corresponding to another latent point.
 
         Optional input:
-            curve:  a curve that should be fitted to the discrete graph
+            init_curve:
+                    a curve that should be fitted to the discrete graph
                     geodesic. By default this is None and a CubicSpline
                     with default paramaters will be constructed.
 
@@ -297,11 +298,12 @@ class DiscretizedManifold(Manifold):
 
         single_source = min(batch1, batch2) == 1 and B > 1
 
-        if curve is None:
+        if init_curve is None:
             curve = CubicSpline(p1, p2)
         else:
-            curve.begin = p1
-            curve.end = p2
+            curve = init_curve
+            curve.begin = p1 if batch1 > 1 else p1.repeat(B, 1)
+            curve.end = p2 if batch2 > 1 else p2.repeat(B, 1)
 
         mesh = torch.meshgrid(*self.grid, indexing="ij")
 

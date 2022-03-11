@@ -119,7 +119,7 @@ If you want to cite the framework feel free to use this (but only if you loved i
 ```bibtex
 @article{software:stochman,
   title={StochMan},
-  author={Nicki S. Detlefsen and Dimitrios Kalatzis and Søren Hauberg},
+  author={Nicki S. Detlefsen and Alison Pouplin and Cilie W. Feldager and Cong Geng and Dimitris Kalatzis and Helene Hauschultz and Miguel González Duque and Søren Hauberg},
   journal={GitHub. Note: https://github.com/MachineLearningLifeScience/stochman/},
   year={2021}
 }

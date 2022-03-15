@@ -4,6 +4,7 @@
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pytorch-lightning)](https://pypi.org/project/stochman/)
 [![PyPI Status](https://badge.fury.io/py/stochman.svg)](https://badge.fury.io/py/stochman)
 [![PyPI Status](https://pepy.tech/badge/stochman)](https://pepy.tech/badge/stochman)
+[![license](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/MachineLearningLifeScience/stochman/blob/master/LICENSE)
 
 # StochMan - Stochastic Manifolds made easier
 

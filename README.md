@@ -1,6 +1,10 @@
 ![Logo](images/stochman.png)
 ---
 
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pytorch-lightning)](https://pypi.org/project/stochman/)
+[![PyPI Status](https://badge.fury.io/py/stochman.svg)](https://badge.fury.io/py/stochman)
+[![PyPI Status](https://pepy.tech/badge/stochman)](https://pepy.tech/badge/stochman)
+
 # StochMan - Stochastic Manifolds made easier
 
 StochMan (Stochastic Manifolds) is a collection of elementary algorithms for computations 

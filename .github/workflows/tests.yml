@@ -37,6 +37,7 @@ jobs:
       run: |
         conda info
         conda install cpuonly mkl pytorch=${{ matrix.pytorch-version }} packaging
+        export PIP_IGNORE_INSTALLED=0
         pip install -r requirements.txt
         pip install -r requirements_tests.txt
         pip list

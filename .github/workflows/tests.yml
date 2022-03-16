@@ -16,6 +16,8 @@ jobs:
         os: [ubuntu-20.04, macOS-10.15, windows-2019]
         python-version: [3.8, 3.9]
         pytorch-version: ["1.7.0", "1.8.0", "1.9.0", "1.10.0"]
+        exclude:
+          - {python-version: 3.9, pytorch-version: "1.7.0"}
 
     steps:
     - name: Checkout

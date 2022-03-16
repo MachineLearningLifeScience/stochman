@@ -14,40 +14,27 @@ jobs:
       matrix:
         os: [ubuntu-20.04, macOS-10.15, windows-2019]
         python-version: [3.6, 3.7, 3.8, 3.9]
-        pytorch-version: ["1.7", "1.8", "1.9", "1.10", "1.11"]
+        pytorch-version: ["1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0"]
 
     steps:
     - name: Checkout
       uses: actions/checkout@v2
 
-    - name: Setup Miniconda using Python ${{ matrix.python-version }}
-      uses: conda-incubator/setup-miniconda@v2
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
       with:
-        miniforge-variant: Mambaforge
-        miniforge-version: latest
-        use-mamba: true
         python-version: ${{ matrix.python-version }}
-        channels: pytorch,pytorch-test,pytorch-nightly,conda-forge
-        channel-priority: true
-        use-only-tar-bz2: true
-      # prevent hanging Conda creations
-      timeout-minutes: 10
 
     - name: Install dependencies
       run: |
-        conda info
-        conda install cpuonly mkl pytorch=${{ matrix.pytorch-version }} packaging
-        export PIP_IGNORE_INSTALLED=0
+        python -m pip install --upgrade pip
+        pip install torch==${{ matrix.pytorch-version }}
         pip install numpy>=1.16.4 networkx
         pip install -r requirements_tests.txt
-        pip list
-        python -c "from torch import __version__ as ver; assert '.'.join(ver.split('.')[:2]) == '${{ matrix.pytorch-version }}', ver"
-
     - name: Install package
       run: |
         python setup.py install sdist bdist_wheel
         twine check dist/*
-
     - name: Test with pytest
       run: |
         pip install pytest coverage

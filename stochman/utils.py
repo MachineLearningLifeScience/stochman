@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+from multiprocessing.sharedctypes import Value
 import torch
 
 
@@ -51,3 +51,16 @@ def squared_manifold_distance(manifold, p0: torch.Tensor, p1: torch.Tensor):
     """
     distance_op = __Dist2__()
     return distance_op.apply(manifold, p0, p1)
+
+
+def tensor_reduction(x: torch.Tensor, reduction: str):
+    if reduction == 'sum':
+        return x.sum()
+    elif reduction == 'mean':
+        return x.mean()
+    elif reduction is None or reduction == "none":
+        return x
+    else:
+        raise ValueError(
+            f"Expected `reduction` to either be `'mean'`, `'sum'`, `'none'` or `None` but got {reduction}"
+        )

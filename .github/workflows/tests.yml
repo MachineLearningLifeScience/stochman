@@ -30,7 +30,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install torch==${{ matrix.pytorch-version }}
-        pip install numpy>=1.16.4 networkx
+        pip install numpy networkx matplotlib
         pip install -r requirements_tests.txt
     - name: Install package
       run: |

@@ -81,8 +81,7 @@ class BasicCurve(ABC, nn.Module):
 
         """
         with torch.no_grad():
-            import torchplot as plt
-
+            import matplotlib.pyplot as plt
             t = torch.linspace(t0, t1, N, dtype=self.begin.dtype, device=self.device)
             points = self(t)  # NxD or BxNxD
 

@@ -122,7 +122,7 @@ class TestCurves:
         end = torch.randn(batch_size, dim)
         c = curve_class(begin, end, 20)
         try:
-            import torchplot as plt
+            import matplotlib.pyplot as plt
 
             fig, ax = plt.subplots(1, 1)
             c.plot(ax=ax)

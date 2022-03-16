@@ -6,6 +6,7 @@
 [![PyPI Status](https://pepy.tech/badge/stochman)](https://pepy.tech/badge/stochman)
 [![license](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/MachineLearningLifeScience/stochman/blob/master/LICENSE)
 [![Tests](https://github.com/MachineLearningLifeScience/stochman/actions/workflows/tests.yml/badge.svg)](https://github.com/MachineLearningLifeScience/stochman/blob/master/.github/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/MachineLearningLifeScience/stochman/branch/master/graph/badge.svg)](https://codecov.io/gh/MachineLearningLifeScience/stochman)
 # StochMan - Stochastic Manifolds made easier
 
 StochMan (Stochastic Manifolds) is a collection of elementary algorithms for computations 

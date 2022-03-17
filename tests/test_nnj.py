@@ -130,6 +130,9 @@ def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
         (nnj.Sequential(nnj.Conv1d(_features, 3, 3), nnj.BatchNorm1d(3)), _1d_conv_input_shape),
         (nnj.Sequential(nnj.Conv2d(_features, 3, 3), nnj.BatchNorm2d(3)), _2d_conv_input_shape),
         (nnj.Sequential(nnj.Conv3d(_features, 3, 3), nnj.BatchNorm3d(3)), _3d_conv_input_shape),
+        (nnj.Sequential(nnj.Conv1d(_features, 3, 3), nnj.MaxPool1d(2)), _1d_conv_input_shape),
+        (nnj.Sequential(nnj.Conv2d(_features, 3, 3), nnj.MaxPool2d(2)), _2d_conv_input_shape),
+        (nnj.Sequential(nnj.Conv3d(_features, 3, 3), nnj.MaxPool3d(2)), _3d_conv_input_shape),
     ],
 )
 @pytest.mark.parametrize("device", ["cpu", "cuda:0"])

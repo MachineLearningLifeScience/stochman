@@ -6,6 +6,8 @@
 Welcome to stochman's documentation!
 ====================================
 
+.. automodule:: stochman
+
 WORK IN PROGRESS!
 
 StochMan (Stochastic Manifolds) is a collection of elementary algorithms for computations 

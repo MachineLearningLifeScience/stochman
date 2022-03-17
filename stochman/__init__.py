@@ -40,7 +40,7 @@ if __STOCHMAN_SETUP__:  # pragma: no cover
     # We are not importing the rest of the package during the build process, as it may not be compiled yet
 else:
     # import modules
-    from . import curves, discretized_manifold, geodesic, manifold, nnj
+    from stochman import curves, discretized_manifold, geodesic, manifold, nnj
 
     # import classes for direct access
-    from .curves import CubicSpline, DiscreteCurve
+    from stochman.curves import CubicSpline, DiscreteCurve

@@ -95,7 +95,7 @@ class VAE_motion_UQ(VAE_Motion, StatisticalManifold):
         """
         zsh = z.shape
         z = z.reshape(-1, zsh[-1])
-        dec_mu, dec_k = self.decode(z)  # Nx(num_bones)x3, Nx(num_bones)
+        dec_mu, dec_k = super().decode(z)  # Nx(num_bones)x3, Nx(num_bones)
 
         # Distance to the supp.
         alpha = self.similarity(self.min_distance(z)).unsqueeze(-1)
@@ -105,6 +105,14 @@ class VAE_motion_UQ(VAE_Motion, StatisticalManifold):
         mush = dec_mu.shape
         ksh = dec_k.shape
         return dec_mu.view(zsh[:-1] + mush[1:]), reweighted_k.view(zsh[:-1] + ksh[1:])
+
+    def decode(self, z, reweight=True):
+        if reweight:
+            mu, k = self.reweight(z) 
+        else:
+            mu, k = super().decode(z)
+        
+        return VonMisesFisher(loc=mu, scale=k)
 
     def forward(self, x):
         """
@@ -130,7 +138,7 @@ class VAE_motion_UQ(VAE_Motion, StatisticalManifold):
 
         return x, p_mu, p_k.unsqueeze(2), q_mu, q_var
 
-    def plot_latent_space(self):
+    def plot_latent_space(self, ax=None):
         encodings = self.encodings.detach().numpy()
         enc_x, enc_y = encodings[:, 0], encodings[:, 1]
 
@@ -152,7 +160,9 @@ class VAE_motion_UQ(VAE_Motion, StatisticalManifold):
             i, j = positions[(x.item(), y.item())]
             K[i, j] = mean_ks[l]
 
-        _, ax = plt.subplots(1, 1)
+        if ax is None:
+            _, ax = plt.subplots(1, 1)
+
         ax.scatter(encodings[:, 0], encodings[:, 1], s=1)
         # ax.scatter(self.cluster_centers[:, 0], self.cluster_centers[:, 1])
         plot = ax.imshow(K, extent=[*x_lims, *y_lims])
@@ -173,6 +183,13 @@ if __name__ == "__main__":
         torch.load("./examples/black_box_random_geometries/von_mises_fisher_example/models/motion_2.pt")
     )
     vae_uq.update_cluster_centers()
-    vae_uq.plot_latent_space()
+    vae_manifold = StatisticalManifold(vae_uq)
+
+    _, ax = plt.subplots(1, 1, figsize=(7, 7))
+    vae_uq.plot_latent_space(ax=ax)
+    for _ in range(10):
+        idx_1, idx_2 = np.random.randint(0, len(vae_uq.encodings), size=(2,))
+        geodesic, _ = vae_manifold.connecting_geodesic(vae_uq.encodings[idx_1], vae_uq.encodings[idx_2])
+        geodesic.plot(ax=ax)
+
     plt.show()
-    pass

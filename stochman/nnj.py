@@ -7,7 +7,7 @@ from torch import nn, Tensor
 
 
 class Identity(nn.Module):
-    """ Identity module that will return the same input as it receives. """
+    """Identity module that will return the same input as it receives."""
 
     def __init__(self):
         super().__init__()
@@ -30,13 +30,13 @@ class Identity(nn.Module):
 
 
 def identity(x: Tensor) -> Tensor:
-    """ Function that for a given input x returns the corresponding identity jacobian matrix """
+    """Function that for a given input x returns the corresponding identity jacobian matrix"""
     m = Identity()
     return m(x, jacobian=True)[1]
 
 
 class Sequential(nn.Sequential):
-    """ Subclass of sequential that also supports calculating the jacobian through an network """
+    """Subclass of sequential that also supports calculating the jacobian through an network"""
 
     def forward(
         self, x: Tensor, jacobian: Union[Tensor, bool] = False
@@ -371,3 +371,22 @@ class Sqrt(AbstractActivationJacobian, nn.Module):
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = 0.5 / val
         return jac
+
+
+class Norm2(nn.Module):
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x, jacobian=False):
+        val = torch.sum(x ** 2, dim=self.dim, keepdim=True)
+
+        if jacobian:
+            J = self._jacobian(x, val)
+            return val, J
+        else:
+            return val
+
+    def _jacobian(self, x, val):
+        J = 2.0 * x.unsqueeze(1)
+        return J

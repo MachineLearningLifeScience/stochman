@@ -15,7 +15,8 @@ models_path = filepath / "models"
 models_path.mkdir(exist_ok=True)
 
 
-def fit(model: VAE_Motion, data_loader, device, optimizer):
+# Training function
+def fit(model, data_loader, device, optimizer):
     model.train()
     running_loss = 0.0
     for pos in tqdm(data_loader):
@@ -23,8 +24,8 @@ def fit(model: VAE_Motion, data_loader, device, optimizer):
         pos = pos.to(device)
         # pos = pos.unsqueeze(1)  # old model
         optimizer.zero_grad()
-        q_z_given_x, p_x_given_z = model.forward(pos)
-        loss = model.elbo_loss(pos, q_z_given_x, p_x_given_z)
+        loss_params = model(pos)
+        loss = model.elbo_loss(*loss_params)
         running_loss += loss.item()
         loss.backward()
         optimizer.step()
@@ -39,8 +40,8 @@ def validate(model, test_loader, device, test_dataset, epoch=0):
             pos = pos[0]
             pos = pos.to(device)
             # pos = pos.unsqueeze(1)  # old model
-            q_z_given_x, p_x_given_z = model.forward(pos)
-            loss = model.elbo_loss(pos, q_z_given_x, p_x_given_z)
+            loss_params = model(pos)
+            loss = model.elbo_loss(*loss_params)
             running_loss += loss.item()
 
     print(f"Loss in validation: {running_loss / len(test_dataset)}")
@@ -99,8 +100,8 @@ if __name__ == "__main__":
     n_bones = len(bones)
 
     # Loads up the model.
-    model = VAE_Motion(n_bones=n_bones, n_hidden=n_hidden, radii=radii)
+    model = VAE_Motion(2, n_bones=n_bones, n_hidden=n_hidden, radii=radii)
     print(model)
 
     # Trains
-    run(model, train_dataset, test_dataset, name="motion")
+    run(model, train_dataset, test_dataset, name="motion_2")

@@ -12,12 +12,13 @@ from vmf import VonMisesFisher
 from stochman.manifold import StatisticalManifold
 
 
-class VAE_Motion(torch.nn.Module, StatisticalManifold):
-    def __init__(self, n_bones: int, n_hidden: int) -> None:
+class VAE_Motion(torch.nn.Module):
+    def __init__(self, n_bones: int, n_hidden: int, radii: torch.Tensor) -> None:
         super().__init__()
         self.n_bones = n_bones
         self.n_hidden = n_hidden
         self.input_dim = n_bones * 3
+        self.radii = torch.from_numpy(radii).unsqueeze(0).type(torch.float)
 
         # An encoder for N(mu, sigma) in latent space (dim 2)
         self.encoder = nn.Linear(self.input_dim, self.n_hidden)
@@ -73,7 +74,8 @@ class VAE_Motion(torch.nn.Module, StatisticalManifold):
         return q_z_given_x, p_x_given_z
 
     def elbo_loss(self, x: torch.Tensor, q_z_given_x: Normal, p_x_given_z: VonMisesFisher):
-        rec_loss = -p_x_given_z.log_prob(x).sum(dim=1)
+        rec_loss = -(self.radii * p_x_given_z.log_prob(x)).sum(dim=1)
         kl = kl_divergence(q_z_given_x, self.p_z).sum(dim=1)
 
-        return (rec_loss + kl).mean()
+        beta = 0.0001
+        return (rec_loss + beta * kl).mean()

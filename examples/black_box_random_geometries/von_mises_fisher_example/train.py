@@ -99,7 +99,7 @@ if __name__ == "__main__":
     n_bones = len(bones)
 
     # Loads up the model.
-    model = VAE_Motion(n_bones=n_bones, n_hidden=n_hidden)
+    model = VAE_Motion(n_bones=n_bones, n_hidden=n_hidden, radii=radii)
     print(model)
 
     # Trains

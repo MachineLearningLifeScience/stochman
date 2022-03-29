@@ -52,7 +52,10 @@ class VonMisesFisher(torch.distributions.Distribution):
 
     @property
     def mean(self):
-        return self.loc * (self.ive(self.__m / 2, self.scale) / self.ive(self.__m / 2 - 1, self.scale))
+        return self.loc * (
+            self.ive(self.__m / 2, self.scale.unsqueeze(-1))
+            / self.ive(self.__m / 2 - 1, self.scale.unsqueeze(-1))
+        )
 
     @property
     def stddev(self):

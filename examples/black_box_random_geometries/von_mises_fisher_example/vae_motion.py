@@ -26,9 +26,12 @@ class VAE_Motion(torch.nn.Module):
         self.enc_logsigma = nn.Linear(self.n_hidden, 2)
 
         # A decoder
-        self.decoder = nn.Linear(2, self.n_hidden)
-        self.dec_mu = nn.Linear(self.n_hidden, self.input_dim)
-        self.dec_k = nn.Sequential(nn.Linear(self.n_hidden, self.n_bones), nn.Softplus())
+        self.decoder = nn.Sequential(
+            nn.Linear(2, self.n_hidden),
+            nn.Linear(self.n_hidden, self.input_dim),
+        )
+        self.dec_mu = nn.Linear(self.input_dim, self.input_dim)
+        self.dec_k = nn.Sequential(nn.Linear(self.input_dim, self.n_bones), nn.Softplus())
 
         # A prior over the latent codes
         self.p_z = Normal(torch.zeros(2), torch.ones(2))
@@ -52,7 +55,7 @@ class VAE_Motion(torch.nn.Module):
         # Avoid collapses
         k = k + 0.01
 
-        return VonMisesFisher(loc=mu, scale=k)
+        return VonMisesFisher(loc=mu, scale=k.unsqueeze(-1))
 
     def forward(self, x: torch.Tensor):
         """
@@ -77,5 +80,5 @@ class VAE_Motion(torch.nn.Module):
         rec_loss = -(self.radii * p_x_given_z.log_prob(x)).sum(dim=1)
         kl = kl_divergence(q_z_given_x, self.p_z).sum(dim=1)
 
-        beta = 0.0001
-        return (rec_loss + beta * kl).mean()
+        beta = 0.01
+        return (rec_loss + beta * kl).sum()

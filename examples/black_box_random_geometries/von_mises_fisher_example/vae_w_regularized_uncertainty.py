@@ -102,7 +102,7 @@ class VAE_motion_UQ(VAE_Motion, StatisticalManifold):
         dec_k = original_vMF.scale
 
         # Distance to the supp.
-        alpha = self.similarity(self.min_distance(z)).unsqueeze(-1)
+        alpha = self.similarity(self.min_distance(z)).unsqueeze(-1).unsqueeze(-1)
         reweighted_k = (1 - alpha) * dec_k + alpha * (torch.ones_like(dec_k) * self.limit_k)
 
         return VonMisesFisher(dec_mu, reweighted_k)

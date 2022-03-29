@@ -196,7 +196,7 @@ class VonMisesFisher(torch.distributions.Distribution):
         return self._log_unnormalized_prob(x) - self._log_normalization()
 
     def _log_unnormalized_prob(self, x):
-        output = self.scale.unsqueeze(-1) * (self.loc * x).sum(-1, keepdim=True)
+        output = self.scale * (self.loc * x).sum(-1, keepdim=True)
 
         return output.view(*(output.shape[:-1]))
 
@@ -207,7 +207,7 @@ class VonMisesFisher(torch.distributions.Distribution):
             - (self.scale + torch.log(self.ive(self.__m / 2 - 1, self.scale)))
         )
 
-        return output
+        return output.view(*(output.shape[:-1]))
 
     def mylog_prob(self, x):
         return self._mylog_unnormalized_prob(x) - self._mylog_normalization()

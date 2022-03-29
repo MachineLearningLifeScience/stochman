@@ -50,7 +50,7 @@ setup(
     packages=find_packages(exclude=["tests", "tests/*"]),
     python_requires=">=3.6",
     install_requires=requirements,
-    download_url="https://github.com/CenterBioML/stochman/archive/0.1.0.zip",
+    download_url="https://github.com/CenterBioML/stochman/archive/0.2.0.zip",
     classifiers=[
         "Environment :: Console",
         "Natural Language :: English",
@@ -65,7 +65,9 @@ setup(
         "Operating System :: OS Independent",
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
+        "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     cmdclass={"clean": CleanCommand},
 )

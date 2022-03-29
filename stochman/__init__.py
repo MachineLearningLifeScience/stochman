@@ -8,7 +8,7 @@ import time
 # fmt: off
 __name__ = "stochman"
 _this_year = time.strftime("%Y")
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 __author__ = "Nicki Skafte Detlefsen et al."
 __author_email__ = "nsde@dtu.dk"
 __license__ = "Apache-2.0"
@@ -40,7 +40,7 @@ if __STOCHMAN_SETUP__:  # pragma: no cover
     # We are not importing the rest of the package during the build process, as it may not be compiled yet
 else:
     # import modules
-    from . import curves, geodesic, manifold, nnj
+    from stochman import curves, discretized_manifold, geodesic, manifold, nnj
 
     # import classes for direct access
-    from .curves import CubicSpline, DiscreteCurve
+    from stochman.curves import CubicSpline, DiscreteCurve

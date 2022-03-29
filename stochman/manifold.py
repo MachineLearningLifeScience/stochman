@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Union
 
@@ -9,7 +8,7 @@ from torch.distributions import kl_divergence, Distribution
 
 from stochman.curves import BasicCurve, CubicSpline
 from stochman.geodesic import geodesic_minimizing_energy, shooting_geodesic
-from stochman.utilities import squared_manifold_distance
+from stochman.utils import squared_manifold_distance, tensor_reduction
 
 
 class Manifold(ABC):
@@ -21,13 +20,14 @@ class Manifold(ABC):
     - Add examples to show the differences between Manifold and EmbeddedManifold.
     """
 
-    def curve_energy(self, curve: BasicCurve) -> torch.Tensor:
+    def curve_energy(self, curve: BasicCurve, reduction: Optional[str] = "sum") -> torch.Tensor:
         """
         Compute the discrete energy of a given curve.
 
-        Input:
-            curve:      a Nx(d) torch Tensor representing a curve or
-                        a BxNx(d) torch Tensor representing B curves.
+        Args:
+            curve: a Nx(d) torch Tensor representing a curve or a BxNx(d) torch Tensor representing B curves.
+            reduction: how to reduce the curve energy over the batch dimension. Choose between
+                `'sum'`, `'mean'`, `'none'` or `None` (where the last two will return the individual scores)
 
         Output:
             energy:     a scalar corresponding to the energy of
@@ -47,8 +47,8 @@ class Manifold(ABC):
         d = curve.shape[2]
         delta = curve[:, 1:] - curve[:, :-1]  # Bx(N-1)x(d)
         flat_delta = delta.view(-1, d)  # (B*(N-1))x(d)
-        energy = self.inner(curve[:, :-1].view(-1, d), flat_delta, flat_delta)  # B*(N-1)
-        return energy.sum()  # scalar
+        energy = self.inner(curve[:, :-1].reshape(-1, d), flat_delta, flat_delta)  # B*(N-1)
+        return tensor_reduction(energy, reduction)
 
     def curve_length(self, curve: BasicCurve) -> torch.Tensor:
         """
@@ -74,7 +74,7 @@ class Manifold(ABC):
         B, N, d = curve.shape
         delta = curve[:, 1:] - curve[:, :-1]  # Bx(N-1)x(d)
         flat_delta = delta.view(-1, d)  # (B*(N-1))x(d)
-        energy = self.inner(curve[:, :-1].view(-1, d), flat_delta, flat_delta)  # B*(N-1)
+        energy = self.inner(curve[:, :-1].reshape(-1, d), flat_delta, flat_delta)  # B*(N-1)
         length = energy.view(B, N - 1).sqrt().sum(dim=1)  # B
         return length
 
@@ -367,11 +367,13 @@ class Manifold(ABC):
                         is the geodesic distance from p0 to p1.
         """
         if curve is None:
-            curve = self.connecting_geodesic(p0, p1)
+            curve, _ = self.connecting_geodesic(p0, p1)
         if curve is not None and optimize:
-            curve = self.connecting_geodesic(p0, p1, init_curve=curve)
+            curve, _ = self.connecting_geodesic(p0, p1, init_curve=curve)
         with torch.no_grad():
             lm = curve.deriv(torch.zeros(1))
+            if lm.ndim == 3:
+                lm.squeeze_(1)
         return lm
 
     def expmap(self, p, v):
@@ -419,13 +421,14 @@ class EmbeddedManifold(Manifold, ABC):
     should inherit from this abstract base class abstraction.
     """
 
-    def curve_energy(self, curve: BasicCurve, dt=None):
+    def curve_energy(self, curve: BasicCurve, reduction: Optional[str] = "sum", dt=None):
         """
         Compute the discrete energy of a given curve.
 
-        Input:
-            curve:      a Nx(d) torch Tensor representing a curve or
-                        a BxNx(d) torch Tensor representing B curves.
+        Args:
+            curve: a Nx(d) torch Tensor representing a curve or a BxNx(d) torch Tensor representing B curves.
+            reduction: how to reduce the curve energy over the batch dimension. Choose between
+                `'sum'`, `'mean'`, `'none'` or `None` (where the last two will return the individual scores)
 
         Output:
             energy:     a scalar corresponding to the energy of
@@ -446,8 +449,7 @@ class EmbeddedManifold(Manifold, ABC):
         B, N, D = emb_curve.shape
         delta = emb_curve[:, 1:, :] - emb_curve[:, :-1, :]  # Bx(N-1)xD
         energy = (delta ** 2).sum((1, 2)) * dt  # B
-
-        return energy
+        return tensor_reduction(energy, reduction)
 
     def curve_length(self, curve: BasicCurve, dt=None):
         """
@@ -595,44 +597,6 @@ class LocalVarMetric(Manifold):
             return torch.cat(M), torch.cat(dMdc, dim=0)
         else:
             return torch.cat(M)
-
-    def curve_energy(self, c):
-        """
-        Evaluate the energy of a curve represented as a discrete set of points.
-
-        Input:
-            c:      A discrete set of points along a curve. This is represented
-                    as a PxD or BxPxD torch Tensor. The points are assumed to be ordered
-                    along the curve and evaluated at equidistant time points.
-
-        Output:
-            energy: The energy of the input curve.
-        """
-        if len(c.shape) == 2:
-            c.unsqueeze_(0)  # add batch dimension if one isn't present
-        energy = torch.zeros(1)
-        for b in range(c.shape[0]):
-            M = self.metric(c[b, :-1])  # (P-1)xD
-            delta1 = (c[b, 1:] - c[b, :-1]) ** 2  # (P-1)xD
-            energy += (M * delta1).sum()
-        return energy
-
-    def curve_length(self, c):
-        """
-        Evaluate the length of a curve represented as a discrete set of points.
-
-        Input:
-            c:      A discrete set of points along a curve. This is represented
-                    as a PxD torch Tensor. The points are assumed to be ordered
-                    along the curve and evaluated at equidistant indices.
-
-        Output:
-            length: The length of the input curve.
-        """
-        M = self.metric(c[:-1])  # (P-1)xD
-        delta1 = (c[1:] - c[:-1]) ** 2  # (P-1)xD
-        length = (M * delta1).sum(dim=1).sqrt().sum()
-        return length
 
     def geodesic_system(self, c, dc):
         """

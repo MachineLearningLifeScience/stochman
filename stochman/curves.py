@@ -21,16 +21,32 @@ class BasicCurve(ABC, nn.Module):
         self._num_nodes = num_nodes
         self._requires_grad = requires_grad
 
-        # register begin and end as buffers
-        if len(begin.shape) == 1 or begin.shape[0] == 1:
-            self.register_buffer("begin", begin.detach().view((1, -1)))  # 1xD
+        # if either begin or end only has one point, while the other has a batch
+        # then we expand the singular point. End result is that both begin and
+        # end should have shape BxD
+        batch_begin = 1 if len(begin.shape) == 1 else begin.shape[0]
+        batch_end = 1 if len(end.shape) == 1 else end.shape[0]
+        if batch_begin == 1 and batch_end == 1:
+            _begin = begin.detach().view((1, -1))  # 1xD
+            _end = end.detach().view((1, -1))  # 1xD
+        elif batch_begin == 1:  # batch_end > 1
+            _begin = begin.detach().view((1, -1)).repeat(batch_end, 1)  # BxD
+            _end = end.detach()  # BxD
+        elif batch_end == 1:  # batch_begin > 1
+            _begin = begin.detach()  # BxD
+            _end = end.detach().view((1, -1)).repeat(batch_begin, 1)  # BxD
+        elif batch_begin == batch_end:
+            _begin = begin.detach()  # BxD
+            _end = end.detach()  # BxD
         else:
-            self.register_buffer("begin", begin.detach())  # BxD
+            raise ValueError(
+                "BasicCurve.__init__ requires begin and end points to have "
+                "the same shape"
+            )
 
-        if len(end.shape) == 1 or end.shape[0] == 1:
-            self.register_buffer("end", end.detach().view((1, -1)))  # 1xD
-        else:
-            self.register_buffer("end", end.detach())  # BxD
+        # register begin and end as buffers
+        self.register_buffer("begin", _begin)  # BxD
+        self.register_buffer("end", _end)  # BxD
 
         # overriden by child modules
         self._init_params(*args, **kwargs)
@@ -66,8 +82,7 @@ class BasicCurve(ABC, nn.Module):
 
         """
         with torch.no_grad():
-            import torchplot as plt
-
+            import matplotlib.pyplot as plt
             t = torch.linspace(t0, t1, N, dtype=self.begin.dtype, device=self.device)
             points = self(t)  # NxD or BxNxD
 
@@ -235,7 +250,7 @@ class DiscreteCurve(BasicCurve):
 
     def constant_speed(
         self, metric=None, t: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Reparametrize the curve to have constant speed.
 
@@ -272,7 +287,7 @@ class DiscreteCurve(BasicCurve):
             _ = S.fit(new_t, t.unsqueeze(0).expand(B, -1).unsqueeze(2))
             new_params = self(S(self.t[:, :, 0]).squeeze(-1))  # Bx(num_nodes-2)xD
             self.params = nn.Parameter(new_params)
-            return new_t, Ct
+            return new_t, Ct, local_len.sum(dim=1)
 
     def tospline(self):
         from stochman import CubicSpline
@@ -437,14 +452,14 @@ class CubicSpline(BasicCurve):
             if t.dim() == 1:
                 t = t.expand(coeffs.shape[0], -1)  # Bx|t|
             # evaluate the derivative spline
-            retval = self.__ppeval__(t, dcoeffs)  # Bx|t|xD
+            retval = self._eval_polynomials(t, dcoeffs)  # Bx|t|xD
             # tt = t.view((-1, 1)) # |t|x1
             retval += delta.unsqueeze(1)
         return retval
 
     def constant_speed(
         self, metric=None, t: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Reparametrize the curve to have constant speed.
 
@@ -474,7 +489,7 @@ class CubicSpline(BasicCurve):
             cs = local_len.cumsum(dim=1)  # Bx(N-1)
             new_t = torch.cat((torch.zeros(B, 1), cs / cs[:, -1].unsqueeze(1)), dim=1)  # BxN
             _ = self.fit(new_t, Ct)
-            return new_t, Ct
+            return new_t, Ct, local_len.sum(dim=1)
 
     def todiscrete(self, num_nodes=None):
         from stochman import DiscreteCurve

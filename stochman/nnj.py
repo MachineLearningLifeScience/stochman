@@ -18,7 +18,7 @@ class Identity(nn.Module):
         if jacobian:
             xs = x.shape
             jac = (
-                torch.eye(prod(xs[1:]), prod(xs[1:]), dtype=x.dtype)
+                torch.eye(prod(xs[1:]), prod(xs[1:]), dtype=x.dtype, device=x.device)
                 .repeat(xs[0], 1, 1)
                 .reshape(xs[0], *xs[1:], *xs[1:])
             )
@@ -266,6 +266,113 @@ class AbstractActivationJacobian:
         return val
 
 
+class Softmax(AbstractActivationJacobian, nn.Softmax):
+    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
+        if self.dim == 0:
+            raise ValueError("Jacobian computation not supported for `dim=0`")
+        jac = torch.diag_embed(val) - torch.matmul(val.unsqueeze(-1), val.unsqueeze(-2))
+        return jac
+
+    def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
+        jac = self._jacobian(x, val)
+        n = jac_in.ndim - jac.ndim
+        jac = jac.reshape((1,) * n + jac.shape)
+        if jac_in.ndim == 4:
+            return (jac @ jac_in.permute(3, 0, 1, 2)).permute(1, 2, 3, 0)
+        if jac_in.ndim == 5:
+            return (jac @ jac_in.permute(3, 4, 0, 1, 2)).permute(2, 3, 4, 0, 1)
+        if jac_in.ndim == 6:
+            return (jac @ jac_in.permute(3, 4, 5, 0, 1, 2)).permute(3, 4, 5, 0, 1, 2)
+        return jac @ jac_in
+
+
+class BatchNorm1d(AbstractActivationJacobian, nn.BatchNorm1d):
+    # only implements jacobian during testing
+    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
+        jac = (self.weight / (self.running_var + self.eps).sqrt()).unsqueeze(0)
+        return jac
+
+
+class BatchNorm2d(AbstractActivationJacobian, nn.BatchNorm2d):
+    # only implements jacobian during testing
+    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
+        jac = (self.weight / (self.running_var + self.eps).sqrt()).unsqueeze(0)
+        return jac
+
+
+class BatchNorm3d(AbstractActivationJacobian, nn.BatchNorm3d):
+    # only implements jacobian during testing
+    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
+        jac = (self.weight / (self.running_var + self.eps).sqrt()).unsqueeze(0)
+        return jac
+
+
+class MaxPool1d(AbstractJacobian, nn.MaxPool1d):
+    def forward(self, input: Tensor):
+        val, idx = F.max_pool1d(
+            input, self.kernel_size, self.stride,
+            self.padding, self.dilation, self.ceil_mode,
+            return_indices=True
+        )
+        self.idx = idx
+        return val
+
+    def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
+        b, c1, l1 = x.shape
+        c2, l2 = val.shape[1:]
+
+        jac_in_orig_shape = jac_in.shape
+        jac_in = jac_in.reshape(-1, l1, *jac_in_orig_shape[3:])
+        arange_repeated = torch.repeat_interleave(torch.arange(b * c1), l2).long()
+        idx = self.idx.reshape(-1)
+        jac_in = jac_in[arange_repeated, idx, :, :].reshape(*val.shape, *jac_in_orig_shape[3:])
+        return jac_in
+
+
+class MaxPool2d(AbstractJacobian, nn.MaxPool2d):
+    def forward(self, input: Tensor):
+        val, idx = F.max_pool2d(
+            input, self.kernel_size, self.stride,
+            self.padding, self.dilation, self.ceil_mode,
+            return_indices=True
+        )
+        self.idx = idx
+        return val
+
+    def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
+        b, c1, h1, w1 = x.shape
+        c2, h2, w2 = val.shape[1:]
+
+        jac_in_orig_shape = jac_in.shape
+        jac_in = jac_in.reshape(-1, h1 * w1, *jac_in_orig_shape[4:])
+        arange_repeated = torch.repeat_interleave(torch.arange(b * c1), h2 * w2).long()
+        idx = self.idx.reshape(-1)
+        jac_in = jac_in[arange_repeated, idx, :, :, :].reshape(*val.shape, *jac_in_orig_shape[4:])
+        return jac_in
+
+
+class MaxPool3d(AbstractJacobian, nn.MaxPool3d):
+    def forward(self, input: Tensor):
+        val, idx = F.max_pool3d(
+            input, self.kernel_size, self.stride,
+            self.padding, self.dilation, self.ceil_mode,
+            return_indices=True
+        )
+        self.idx = idx
+        return val
+
+    def _jacobian_mult(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
+        b, c1, d1, h1, w1 = x.shape
+        c2, d2, h2, w2 = val.shape[1:]
+
+        jac_in_orig_shape = jac_in.shape
+        jac_in = jac_in.reshape(-1, d1 * h1 * w1, *jac_in_orig_shape[5:])
+        arange_repeated = torch.repeat_interleave(torch.arange(b * c1), h2 * d2 * w2).long()
+        idx = self.idx.reshape(-1)
+        jac_in = jac_in[arange_repeated, idx, :, :].reshape(*val.shape, *jac_in_orig_shape[5:])
+        return jac_in
+
+
 class Sigmoid(AbstractActivationJacobian, nn.Sigmoid):
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = val * (1.0 - val)
@@ -275,6 +382,14 @@ class Sigmoid(AbstractActivationJacobian, nn.Sigmoid):
 class ReLU(AbstractActivationJacobian, nn.ReLU):
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = (val > 0.0).type(val.dtype)
+        return jac
+
+
+class PReLU(AbstractActivationJacobian, nn.PReLU):
+    def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
+        jac = (val >= 0.0).type(val.dtype) + (val < 0.0).type(val.dtype) * self.weight.reshape(
+            (1, self.num_parameters) + (1,) * (val.ndim - 2)
+        )
         return jac
 
 
@@ -301,8 +416,8 @@ class Hardtanh(AbstractActivationJacobian, nn.Hardtanh):
 
 class LeakyReLU(AbstractActivationJacobian, nn.LeakyReLU):
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
-        jac = torch.zeros_like(val)
-        jac[val.abs() < 1.0] = 1.0
+        jac = torch.ones_like(val)
+        jac[x < 0.0] = self.negative_slope
         return jac
 
 

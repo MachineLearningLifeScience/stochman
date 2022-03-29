@@ -9,25 +9,51 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04, macOS-10.15, windows-2019]
+        python-version: [3.8, 3.9]
+        pytorch-version: ["1.7.0", "1.8.0", "1.9.0", "1.10.0"]
+        exclude:
+          - {python-version: 3.9, pytorch-version: "1.7.0"}
 
     steps:
     - name: Checkout
       uses: actions/checkout@v2
-    - name: Set up Python 3.8
+
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
-        python-version: 3.8
+        python-version: ${{ matrix.python-version }}
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install torch==${{ matrix.pytorch-version }}
+        pip install numpy networkx matplotlib
         pip install -r requirements_tests.txt
+
     - name: Install package
       run: |
         python setup.py install sdist bdist_wheel
         twine check dist/*
+
     - name: Test with pytest
       run: |
-        pip install pytest
-        pytest -v
+        pip install pytest coverage
+        coverage run -m pytest tests/ -vv
+        coverage report -m
+        coverage xml
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v1
+      if: always()
+      continue-on-error: true
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: coverage.xml
+        flags: cpu,pytest,${{ runner.os }}
+        name: Test-coverage
+        fail_ci_if_error: false

@@ -1,4 +1,5 @@
-torch>=1.6
-numpy>=1.16.4
-scikit-learn>=1.0.1
-torchplot
+torch>=1.7
+numpy
+networkx
+matplotlib
+scikit-learn

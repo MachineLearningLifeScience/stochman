@@ -76,10 +76,8 @@ class Linear(AbstractJacobian, nn.Linear):
     def _jacobian_wrt_input_transpose_mult_left_vec(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
         return F.linear(jac_in.movedim(1, -1), self.weight.T, bias=None).movedim(-1, 1)
 
-    def _sandwich_full_wrt_input(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
-        return torch.einsum("nm,bnj,jk->bmk", self.weight, tmp, self.weight)
-
-    def _sandwich_full_wrt_weight(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+    def _jacobian_wrt_weight_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        
         b, c = x.shape
         diag_elements = torch.diagonal(tmp, dim1=1, dim2=2)
         feat_k2 = (x**2).unsqueeze(1)
@@ -91,6 +89,9 @@ class Linear(AbstractJacobian, nn.Linear):
             h_k = torch.cat([h_k, diag_elements], dim=1)
 
         return h_k
+
+    def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        return torch.einsum("nm,bnj,jk->bmk", self.weight, tmp, self.weight)
 
 
 class PosLinear(AbstractJacobian, nn.Linear):
@@ -122,6 +123,14 @@ class Upsample(AbstractJacobian, nn.Upsample):
             .reshape(xs[0], *jac_in.shape[x.ndim :], *vs[1:])
             .movedim(dims2, dims1)
         )
+
+    def _jacobian_wrt_weight_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        # non parametric, so return empty
+        return []
+
+    def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        raise NotImplementedError
+
 
 
 class Conv1d(AbstractJacobian, nn.Conv1d):
@@ -358,7 +367,7 @@ class Conv2d(nn.Conv2d):
                         dilation=self.dilation,
                         groups=self.groups,
                     )
-                    .reshape(b, *tmp_single_batch.shape[4:], c1, kernel_h, kernel_w)
+                    .reshape(c2, *tmp_single_batch.shape[4:], c1, kernel_h, kernel_w)
                     .movedim((-3, -2, -1), (1, 2, 3))
                 )
 
@@ -381,7 +390,7 @@ class Conv2d(nn.Conv2d):
                     dilation=self.dilation,
                     groups=self.groups,
                 )
-                .reshape(b, *tmp.shape[4:], c1, kernel_h, kernel_w)
+                .reshape(c2, *tmp.shape[4:], c1, kernel_h, kernel_w)
                 .movedim((-3, -2, -1), (1, 2, 3))
             )
 
@@ -389,6 +398,18 @@ class Conv2d(nn.Conv2d):
             Jt_tmp = Jt_tmp.reshape(c2 * c1 * kernel_h * kernel_w, num_of_cols)
 
         return Jt_tmp
+
+    def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        if diag:
+            return self._jacobian_wrt_input_diag_sandwich(x, val, tmp)
+        else:
+            return self._jacobian_wrt_input_full_sandwich(x, val, tmp)
+
+    def _jacobian_wrt_weight_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        if diag:
+            return self._jacobian_wrt_weight_diag_sandwich(x, val, tmp)
+        else:
+            return self._jacobian_wrt_weight_full_sandwich(x, val, tmp)
 
     def _jacobian_wrt_input_full_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
         return self._jacobian_wrt_input_mult_left(x, val, self._jacobian_wrt_input_T_mult_right(x, val, tmp))
@@ -662,14 +683,21 @@ class MaxPool2d(AbstractJacobian, nn.MaxPool2d):
         jac_in = jac_in[arange_repeated, idx, :, :, :].reshape(*val.shape, *jac_in_orig_shape[4:])
         return jac_in
 
-    def _sandwich_full_wrt_input(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+    def _jacobian_wrt_weight_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        # non parametric, so return empty
+        return []
+
+    def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        return self._jacobian_wrt_input_full_sandwich(x, val, tmp)
+
+    def _jacobian_wrt_input_full_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
 
         new_tmp = torch.zeros_like(x)
         new_tmp[self.idx] = tmp
 
         return new_tmp
 
-    def _sandwich_diag_wrt_input(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+    def _jacobian_wrt_input_diag_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
         pass
 
 
@@ -758,7 +786,17 @@ class Tanh(AbstractActivationJacobian, nn.Tanh):
         jac = 1.0 - val**2
         return jac
 
-    def _sandwich_full_wrt_input(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+    def _jacobian_wrt_weight_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        # non parametric, so return empty
+        return []
+
+    def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        if diag:
+            return self._jacobian_wrt_input_diag_sandwich(x, val, tmp)
+        else:
+            return self._jacobian_wrt_input_full_sandwich(x, val, tmp)
+
+    def _jacobian_wrt_input_full_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
 
         jac = self._jacobian(x, val)
         jac = torch.diag_embed(jac.view(x.shape[0], -1))
@@ -766,7 +804,7 @@ class Tanh(AbstractActivationJacobian, nn.Tanh):
 
         return tmp
 
-    def _sandwich_diag_wrt_input(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+    def _jacobian_wrt_input_diag_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
 
         jac = self._jacobian(x, val)
         jac = jac.view(x.shape[0], -1)

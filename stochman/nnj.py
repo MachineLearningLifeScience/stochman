@@ -1,3 +1,4 @@
+from builtins import breakpoint
 from math import prod
 from typing import Optional, Tuple, Union
 
@@ -126,10 +127,26 @@ class Upsample(AbstractJacobian, nn.Upsample):
 
     def _jacobian_wrt_weight_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
         # non parametric, so return empty
-        return []
+        return None
 
     def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
-        raise NotImplementedError
+
+        b, c1, h1, w1 = x.shape
+        c2, h2, w2 = val.shape[1:]
+
+        weight = torch.ones(c2, c1, int(self.scale_factor), int(self.scale_factor), device=x.device)
+
+        tmp = F.conv2d(
+                tmp.reshape(-1, c2, h2, w2),
+                weight=weight,
+                bias=None,
+                stride=int(self.scale_factor),
+                padding=0,
+                dilation=1,
+                groups=1,
+            )
+
+        return tmp.reshape(b, c1*h1*w1)
 
 
 
@@ -176,7 +193,7 @@ def compute_reversed_padding(padding, kernel_size=1):
     return kernel_size - 1 - padding
 
 
-class Conv2d(nn.Conv2d):
+class Conv2d(AbstractJacobian, nn.Conv2d):
     def __init__(
         self,
         in_channels,
@@ -348,7 +365,7 @@ class Conv2d(nn.Conv2d):
 
         if use_less_memory:
             # define moving sum for Jt_tmp
-            Jt_tmp = torch.zeros(b, c2 * c1 * kernel_h * kernel_w, num_of_cols)
+            Jt_tmp = torch.zeros(b, c2 * c1 * kernel_h * kernel_w, num_of_cols, device=x.device)
             for i in range(b):
                 # set the weight to the convolution
                 input_single_batch = x[i : i + 1, :, :, :]
@@ -376,7 +393,6 @@ class Conv2d(nn.Conv2d):
                 Jt_tmp[i, :, :] = Jt_tmp_single_batch
 
         else:
-            # TODO: only works for batch size 1?
             reversed_inputs = torch.flip(x, [-2, -1]).movedim(0, 1)
 
             # convolve each column
@@ -398,6 +414,80 @@ class Conv2d(nn.Conv2d):
             Jt_tmp = Jt_tmp.reshape(c2 * c1 * kernel_h * kernel_w, num_of_cols)
 
         return Jt_tmp
+
+    def _jacobian_wrt_weight_mult_left(
+            self, x: Tensor, val: Tensor, tmp: Tensor, use_less_memory: bool = True
+        ) -> Tensor:
+        b, c1, h1, w1 = x.shape
+        c2, h2, w2 = val.shape[1:]
+        kernel_h, kernel_w = self.kernel_size
+        num_of_rows = tmp.shape[-2]
+
+        # expand rows as cubes [(output channel)x(output height)x(output width)]
+        tmp_rows = tmp.movedim(-1,-2).reshape(b, c2, h2, w2, num_of_rows)
+        # see rows as columns of the transposed matrix
+        tmpt_cols = tmp_rows
+        # transpose the images in (output height)x(output width)
+        tmpt_cols = torch.flip(tmpt_cols, [-3, -2])
+        # switch batch size and output channel
+        tmpt_cols = tmpt_cols.movedim(0,1)
+
+        if use_less_memory:
+
+            tmp_J = torch.zeros(b, c2*c1*kernel_h*kernel_w, num_of_rows, device=x.device)
+            for i in range(b):
+                # set the weight to the convolution
+                input_single_batch = x[i:i+1,:,:,:]
+                reversed_input_single_batch = torch.flip(input_single_batch, [-2,-1]).movedim(0,1)
+                
+                tmp_single_batch = tmpt_cols[:,i:i+1,:,:,:]
+
+                # convolve each column
+                tmp_J_single_batch = (
+                    F.conv2d(
+                        tmpt_cols.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, 1, h2, w2),
+                        weight=reversed_input_single_batch,
+                        bias=None,
+                        stride=self.stride,
+                        padding=self.dw_padding,
+                        dilation=self.dilation,
+                        groups=self.groups,
+                    )
+                    .reshape(c2, *tmp_single_batch.shape[4:], c1, kernel_h, kernel_w)
+                    .movedim((-3, -2, -1), (1, 2, 3))
+                )
+
+                # reshape as a (num of weights)x(num of column) matrix
+                tmp_J_single_batch = tmp_J_single_batch.reshape(c2*c1*kernel_h*kernel_w, num_of_rows)
+                tmp_J[i, :, :] = tmp_J_single_batch
+
+            # transpose
+            tmp_J = tmp_J.movedim(-1,-2)
+        else:        
+            # set the weight to the convolution
+            reversed_inputs = torch.flip(x, [-2,-1]).movedim(0,1)
+
+            # convolve each column
+            Jt_tmptt_cols = (
+                F.conv2d(
+                    tmp_single_batch.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, b, h2, w2),
+                    weight=reversed_inputs,
+                    bias=None,
+                    stride=self.stride,
+                    padding=self.dw_padding,
+                    dilation=self.dilation,
+                    groups=self.groups,
+                )
+                .reshape(c2, *tmp_single_batch.shape[4:], c1, kernel_h, kernel_w)
+                .movedim((-3, -2, -1), (1, 2, 3))
+            )
+
+            # reshape as a (num of input)x(num of output) matrix, one for each batch size
+            Jt_tmptt_cols = Jt_tmptt_cols.reshape(c2*c1*kernel_h*kernel_w,num_of_rows)
+            # transpose
+            tmp_J = Jt_tmptt_cols.movedim(0,1)
+
+        return tmp
 
     def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
         if diag:
@@ -467,7 +557,7 @@ class Conv2d(nn.Conv2d):
 
             output_tmp_single_batch = (
                 F.conv2d(
-                    input_tmp_single_batch.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, c1, h1, w1),
+                    input_tmp_single_batch.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, 1, h2, w2),
                     weight=weigth_sq,
                     bias=None,
                     stride=self.stride,
@@ -475,7 +565,7 @@ class Conv2d(nn.Conv2d):
                     dilation=self.dilation,
                     groups=self.groups,
                 )
-                .reshape(b, *input_tmp_single_batch.shape[4:], c2, h2, w2)
+                .reshape(c2, *input_tmp_single_batch.shape[4:], c1, kernel_h, kernel_w)
                 .movedim((-3, -2, -1), (1, 2, 3))
             )
 
@@ -559,6 +649,12 @@ class Reshape(AbstractJacobian, nn.Module):
     def _jacobian_wrt_input_mult_left_vec(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
         return jac_in.reshape(jac_in.shape[0], *self.dims, *jac_in.shape[2:])
 
+    def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        return tmp
+
+    def _jacobian_wrt_weight_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        return None
+
 
 class Flatten(AbstractJacobian, nn.Module):
     def __init__(self):
@@ -575,6 +671,12 @@ class Flatten(AbstractJacobian, nn.Module):
             return jac_in.reshape(jac_in.shape[0], -1, *jac_in.shape[4:])
         if jac_in.ndim == 9:  # 3d conv
             return jac_in.reshape(jac_in.shape[0], -1, *jac_in.shape[5:])
+
+    def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        return tmp
+
+    def _jacobian_wrt_weight_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        return None
 
 
 class AbstractActivationJacobian:
@@ -685,20 +787,24 @@ class MaxPool2d(AbstractJacobian, nn.MaxPool2d):
 
     def _jacobian_wrt_weight_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
         # non parametric, so return empty
-        return []
+        return None
 
     def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
-        return self._jacobian_wrt_input_full_sandwich(x, val, tmp)
-
-    def _jacobian_wrt_input_full_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
-
-        new_tmp = torch.zeros_like(x)
-        new_tmp[self.idx] = tmp
-
-        return new_tmp
+        return self._jacobian_wrt_input_diag_sandwich(x, val, tmp)
 
     def _jacobian_wrt_input_diag_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
-        pass
+        b, c1, h1, w1 = x.shape
+        c2, h2, w2 = val.shape[1:]
+
+        new_tmp = torch.zeros_like(x)
+        new_tmp = new_tmp.reshape(b * c1, h1 * w1)
+        idx = self.idx.reshape(b * c2, h2 * w2)
+        arange_repeated = torch.repeat_interleave(torch.arange(b * c1), h2 * w2).long()
+        arange_repeated = arange_repeated.reshape(b*c2, h2*w2)
+    
+        new_tmp[arange_repeated, idx] = tmp.reshape(b*c2, h2*w2)
+
+        return new_tmp.reshape(b, c1 * h1 * w1)
 
 
 class MaxPool3d(AbstractJacobian, nn.MaxPool3d):
@@ -788,7 +894,7 @@ class Tanh(AbstractActivationJacobian, nn.Tanh):
 
     def _jacobian_wrt_weight_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
         # non parametric, so return empty
-        return []
+        return None
 
     def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
         if diag:

@@ -39,10 +39,7 @@ class BasicCurve(ABC, nn.Module):
             _begin = begin.detach()  # BxD
             _end = end.detach()  # BxD
         else:
-            raise ValueError(
-                "BasicCurve.__init__ requires begin and end points to have "
-                "the same shape"
-            )
+            raise ValueError("BasicCurve.__init__ requires begin and end points to have " "the same shape")
 
         # register begin and end as buffers
         self.register_buffer("begin", _begin)  # BxD
@@ -82,6 +79,7 @@ class BasicCurve(ABC, nn.Module):
         """
         with torch.no_grad():
             import matplotlib.pyplot as plt
+
             t = torch.linspace(t0, t1, N, dtype=self.begin.dtype, device=self.device)
             points = self(t)  # NxD or BxNxD
 
@@ -126,7 +124,7 @@ class BasicCurve(ABC, nn.Module):
         if not is_batched:
             points = points.unsqueeze(0)  # 1xNxD
         delta = points[:, 1:] - points[:, :-1]  # Bx(N-1)xD
-        energies = (delta ** 2).sum(dim=2)  # Bx(N-1)
+        energies = (delta**2).sum(dim=2)  # Bx(N-1)
         lengths = energies.sqrt().sum(dim=1)  # B
         return lengths
 

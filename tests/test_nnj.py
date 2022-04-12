@@ -19,7 +19,7 @@ _3d_conv_input_shape = (_batch_size, _features, _dims, _dims, _dims)
 
 
 def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
-    """ Use pytorch build-in jacobian function to compare for correctness of computations"""
+    """Use pytorch build-in jacobian function to compare for correctness of computations"""
     out = f(x)
     output = torch.autograd.functional.jacobian(f, x)
     m = out.ndim
@@ -153,7 +153,7 @@ class TestJacobian:
 
     @pytest.mark.parametrize("return_jac", [True, False])
     def test_jac_return(self, model, input_shape, device, return_jac):
-        """ Test that all models returns the jacobian output if asked for it """
+        """Test that all models returns the jacobian output if asked for it"""
         if "cuda" in device and not torch.cuda.is_available():
             pytest.skip("Test requires cuda support")
 

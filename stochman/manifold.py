@@ -444,7 +444,7 @@ class EmbeddedManifold(Manifold, ABC):
         emb_curve = self.embed(curve)  # BxNxD
         B, N, D = emb_curve.shape
         delta = emb_curve[:, 1:, :] - emb_curve[:, :-1, :]  # Bx(N-1)xD
-        energy = (delta ** 2).sum((1, 2)) * dt  # B
+        energy = (delta**2).sum((1, 2)) * dt  # B
         return tensor_reduction(energy, reduction)
 
     def curve_length(self, curve: BasicCurve, dt=None):
@@ -541,7 +541,7 @@ class LocalVarMetric(Manifold):
         """
         super().__init__()
         self.data = data
-        self.sigma2 = sigma ** 2
+        self.sigma2 = sigma**2
         self.rho = rho
         self.device = device
 
@@ -586,7 +586,7 @@ class LocalVarMetric(Manifold):
             if return_deriv:
                 weighted_delta = (w_p / sigma2).reshape(-1, 1).expand(-1, D) * delta  # NxD
                 dSdc = 2.0 * torch.diag(w_p.mm(delta).flatten()) - weighted_delta.t().mm(delta2)  # DxD
-                dM = dSdc.t() * (m ** 2).reshape(-1, 1).expand(-1, D)  # DxD
+                dM = dSdc.t() * (m**2).reshape(-1, 1).expand(-1, D)  # DxD
                 dMdc.append(dM.reshape(1, D, D))
 
         if return_deriv:

@@ -137,7 +137,7 @@ class Upsample(AbstractJacobian, nn.Upsample):
 
         b, c1, h1, w1 = x.shape
         c2, h2, w2 = val.shape[1:]
-
+        
         weight = torch.ones(c2, c1, int(self.scale_factor), int(self.scale_factor), device=x.device)
 
         tmp = F.conv2d(

@@ -134,14 +134,19 @@ class Upsample(AbstractJacobian, nn.Upsample):
         return None
 
     def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
+        if diag:
+            return self._jacobian_wrt_input_diag_sandwich(x, val, tmp)
+        else:
+            return self._jacobian_wrt_input_full_sandwich(x, val, tmp)
 
+    def _jacobian_wrt_input_diag_sandwich(self, x: Tensor, val: Tensor, diag_tmp: Tensor) -> Tensor:
         b, c1, h1, w1 = x.shape
         c2, h2, w2 = val.shape[1:]
 
         weight = torch.ones(c2, c1, int(self.scale_factor), int(self.scale_factor), device=x.device)
 
-        tmp = F.conv2d(
-            tmp.reshape(-1, c2, h2, w2),
+        diag_tmp = F.conv2d(
+            diag_tmp.reshape(-1, c2, h2, w2),
             weight=weight,
             bias=None,
             stride=int(self.scale_factor),
@@ -150,8 +155,47 @@ class Upsample(AbstractJacobian, nn.Upsample):
             groups=1,
         )
 
-        return tmp.reshape(b, c1 * h1 * w1)
+        return diag_tmp.reshape(b, c1 * h1 * w1)
 
+    def _jacobian_wrt_input_full_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+        b, c1, h1, w1 = x.shape
+        c2, h2, w2 = val.shape[1:]
+
+        assert c1==c2
+
+        weight = torch.ones(1, 1, int(self.scale_factor), int(self.scale_factor), device=x.device)
+
+        tmp = tmp.reshape(b, c2, h2*w2, c2, h2*w2)
+        tmp = tmp.movedim(2,3)
+        tmp_J = F.conv2d(
+            tmp.reshape(b*c2*c2 * h2*w2, 1, h2, w2),
+            weight=weight,
+            bias=None,
+            stride=int(self.scale_factor),
+            padding=0,
+            dilation=1,
+            groups=1,
+        ).reshape(b*c2*c2, h2*w2, h1*w1)
+
+        Jt_tmpt = tmp_J.movedim(-1,-2)
+
+        Jt_tmpt_J = F.conv2d(
+            Jt_tmpt.reshape(b*c2*c2 * h1*w1, 1, h2, w2),
+            weight=weight,
+            bias=None,
+            stride=int(self.scale_factor),
+            padding=0,
+            dilation=1,
+            groups=1,
+        ).reshape(b*c2*c2, h1*w1, h1*w1)
+
+        Jt_tmp_J = Jt_tmpt_J.movedim(-1,-2)
+
+        Jt_tmp_J = Jt_tmp_J.reshape(b, c2, c2, h1*w1, h1*w1)
+        Jt_tmp_J = Jt_tmp_J.movedim(2,3)
+        Jt_tmp_J = Jt_tmp_J.reshape(b, c2*h1*w1, c2*h1*w1)
+
+        return Jt_tmp_J
 
 class Conv1d(AbstractJacobian, nn.Conv1d):
     def _jacobian_wrt_input_mult_left_vec(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
@@ -490,7 +534,7 @@ class Conv2d(AbstractJacobian, nn.Conv2d):
             # transpose
             tmp_J = Jt_tmptt_cols.movedim(0, 1)
 
-        return tmp
+        return tmp_J
 
     def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
         if diag:
@@ -801,9 +845,12 @@ class MaxPool2d(AbstractJacobian, nn.MaxPool2d):
         return None
 
     def _jacobian_wrt_input_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag: bool = False) -> Tensor:
-        return self._jacobian_wrt_input_diag_sandwich(x, val, tmp)
+        if diag:
+            return self._jacobian_wrt_input_diag_sandwich(x, val, tmp)
+        else:
+            return self._jacobian_wrt_input_full_sandwich(x, val, tmp)
 
-    def _jacobian_wrt_input_diag_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+    def _jacobian_wrt_input_diag_sandwich(self, x: Tensor, val: Tensor, diag_tmp: Tensor) -> Tensor:
         b, c1, h1, w1 = x.shape
         c2, h2, w2 = val.shape[1:]
 
@@ -813,9 +860,13 @@ class MaxPool2d(AbstractJacobian, nn.MaxPool2d):
         arange_repeated = torch.repeat_interleave(torch.arange(b * c1), h2 * w2).long()
         arange_repeated = arange_repeated.reshape(b * c2, h2 * w2)
 
-        new_tmp[arange_repeated, idx] = tmp.reshape(b * c2, h2 * w2)
+        new_tmp[arange_repeated, idx] = diag_tmp.reshape(b * c2, h2 * w2)
 
         return new_tmp.reshape(b, c1 * h1 * w1)
+
+    def _jacobian_wrt_input_full_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+
+        return tmp
 
 
 class MaxPool3d(AbstractJacobian, nn.MaxPool3d):

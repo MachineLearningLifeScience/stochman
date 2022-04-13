@@ -142,7 +142,7 @@ class Upsample(AbstractJacobian, nn.Upsample):
     def _jacobian_wrt_input_diag_sandwich(self, x: Tensor, val: Tensor, diag_tmp: Tensor) -> Tensor:
         b, c1, h1, w1 = x.shape
         c2, h2, w2 = val.shape[1:]
-        
+
         weight = torch.ones(c2, c1, int(self.scale_factor), int(self.scale_factor), device=x.device)
 
         diag_tmp = F.conv2d(
@@ -856,17 +856,36 @@ class MaxPool2d(AbstractJacobian, nn.MaxPool2d):
 
         new_tmp = torch.zeros_like(x)
         new_tmp = new_tmp.reshape(b * c1, h1 * w1)
-        idx = self.idx.reshape(b * c2, h2 * w2)
+
+        # indexes for batch and channel
         arange_repeated = torch.repeat_interleave(torch.arange(b * c1), h2 * w2).long()
         arange_repeated = arange_repeated.reshape(b * c2, h2 * w2)
+        # indexes for height and width
+        idx = self.idx.reshape(b * c2, h2 * w2)
 
         new_tmp[arange_repeated, idx] = diag_tmp.reshape(b * c2, h2 * w2)
 
         return new_tmp.reshape(b, c1 * h1 * w1)
 
     def _jacobian_wrt_input_full_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+        b, c1, h1, w1 = x.shape
+        c2, h2, w2 = val.shape[1:]
+        assert c1==c2
 
-        return tmp
+        tmp = tmp.reshape(b, c1, h2*w2, c1, h2*w2).movedim(-2,-3).reshape(b*c1*c1, h2*w2, h2*w2)
+        Jt_tmp_J = torch.zeros((b*c1*c1, h1*w1, h1*w1))
+        # indexes for batch and channel
+        arange_repeated = torch.repeat_interleave(torch.arange(b*c1*c1), h2*w2 * h2*w2).long()
+        arange_repeated = arange_repeated.reshape(b*c1*c1, h2*w2, h2*w2)
+        # indexes for height and width
+        idx = self.idx.reshape(b, c1, h2 * w2).unsqueeze(2).expand(-1, -1, h2*w2, -1)
+        idx_col = idx.unsqueeze(1).expand(-1, c1, -1, -1, -1).reshape(b*c1*c1, h2*w2, h2*w2)
+        idx_row = idx.unsqueeze(2).expand(-1, -1, c1, -1, -1).reshape(b*c1*c1, h2*w2, h2*w2).movedim(-1,-2)
+        
+        Jt_tmp_J[arange_repeated, idx_row, idx_col] = tmp
+        Jt_tmp_J = Jt_tmp_J.reshape(b, c1, c1, h1*w1, h1*w1).movedim(-2,-3).reshape(b, c1*h1*w1, c1*h1*w1)
+
+        return Jt_tmp_J
 
 
 class MaxPool3d(AbstractJacobian, nn.MaxPool3d):

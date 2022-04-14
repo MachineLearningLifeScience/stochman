@@ -76,6 +76,18 @@ class Linear(AbstractJacobian, nn.Linear):
 
     def _jacobian_wrt_input_transpose_mult_left_vec(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
         return F.linear(jac_in.movedim(1, -1), self.weight.T, bias=None).movedim(-1, 1)
+
+    def _jacobian_wrt_input(self, x: Tensor, val: Tensor) -> Tensor:
+        return self.weight
+    
+    def _jacobian_wrt_weight(self, x: Tensor, val: Tensor) -> Tensor:
+        b, c1 = x.shape
+        c2 = val.shape[1]
+        out_identity = torch.diag_embed(torch.ones(c2))
+        jacobian = torch.einsum('bk,ij->bijk', x, out_identity).reshape(b,c2,c2*c1)
+        if self.bias is not None:
+            jacobian = torch.cat([jacobian, out_identity.unsqueeze(0).expand(b,-1,-1)], dim=2)
+        return jacobian
         
     def _jacobian_wrt_input_sandwich(
         self, x: Tensor, val: Tensor, tmp: Tensor, diag_inp: bool = False, diag_out: bool = False
@@ -119,30 +131,31 @@ class Linear(AbstractJacobian, nn.Linear):
     
     def _jacobian_wrt_weight_sandwich_full_to_full(
         self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
-        raise NotImplementedError
+        jacobian = self._jacobian_wrt_weight(x,val)
+        return torch.einsum('bji,bjk,bkq->biq', jacobian, tmp, jacobian)
 
     def _jacobian_wrt_weight_sandwich_full_to_diag(
         self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
-
-        b, c = x.shape
-        diag_elements = torch.diagonal(tmp, dim1=1, dim2=2)
-        feat_k2 = (x**2).unsqueeze(1)
-
-        h_k = torch.bmm(diag_elements.unsqueeze(2), feat_k2).view(b, -1)
-
-        # has a bias
-        if self.bias is not None:
-            h_k = torch.cat([h_k, diag_elements], dim=1)
-
-        return h_k
-    
+        tmp_diag = torch.diagonal(tmp, dim1=1, dim2=2)
+        return self._jacobian_wrt_weight_sandwich_diag_to_diag(x, val, tmp_diag)
+        
     def _jacobian_wrt_weight_sandwich_diag_to_full(
         self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
-        raise NotImplementedError
+        jacobian = self._jacobian_wrt_weight(x,val)
+        return torch.einsum('bji,bj,bjq->biq', jacobian, tmp_diag, jacobian)
 
     def _jacobian_wrt_weight_sandwich_diag_to_diag(
         self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
-        raise NotImplementedError
+
+        b, c1 = x.shape
+        c2 = val.shape[1]
+
+        Jt_tmp_J = torch.bmm(tmp_diag.unsqueeze(2), (x**2).unsqueeze(1)).view(b, c1*c2)
+
+        if self.bias is not None:
+            Jt_tmp_J = torch.cat([Jt_tmp_J, tmp_diag], dim=1)
+
+        return Jt_tmp_J
 
 
 

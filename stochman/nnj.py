@@ -873,7 +873,7 @@ class MaxPool2d(AbstractJacobian, nn.MaxPool2d):
         assert c1==c2
 
         tmp = tmp.reshape(b, c1, h2*w2, c1, h2*w2).movedim(-2,-3).reshape(b*c1*c1, h2*w2, h2*w2)
-        Jt_tmp_J = torch.zeros((b*c1*c1, h1*w1, h1*w1))
+        Jt_tmp_J = torch.zeros((b*c1*c1, h1*w1, h1*w1), device=tmp.device)
         # indexes for batch and channel
         arange_repeated = torch.repeat_interleave(torch.arange(b*c1*c1), h2*w2 * h2*w2).long()
         arange_repeated = arange_repeated.reshape(b*c1*c1, h2*w2, h2*w2)

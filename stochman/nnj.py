@@ -83,7 +83,7 @@ class Linear(AbstractJacobian, nn.Linear):
     def _jacobian_wrt_weight(self, x: Tensor, val: Tensor) -> Tensor:
         b, c1 = x.shape
         c2 = val.shape[1]
-        out_identity = torch.diag_embed(torch.ones(c2))
+        out_identity = torch.diag_embed(torch.ones(c2, device=x.device))
         jacobian = torch.einsum('bk,ij->bijk', x, out_identity).reshape(b,c2,c2*c1)
         if self.bias is not None:
             jacobian = torch.cat([jacobian, out_identity.unsqueeze(0).expand(b,-1,-1)], dim=2)

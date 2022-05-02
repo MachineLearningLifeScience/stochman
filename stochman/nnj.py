@@ -79,16 +79,16 @@ class Linear(AbstractJacobian, nn.Linear):
 
     def _jacobian_wrt_input(self, x: Tensor, val: Tensor) -> Tensor:
         return self.weight
-    
+
     def _jacobian_wrt_weight(self, x: Tensor, val: Tensor) -> Tensor:
         b, c1 = x.shape
         c2 = val.shape[1]
         out_identity = torch.diag_embed(torch.ones(c2, device=x.device))
-        jacobian = torch.einsum('bk,ij->bijk', x, out_identity).reshape(b,c2,c2*c1)
+        jacobian = torch.einsum("bk,ij->bijk", x, out_identity).reshape(b, c2, c2 * c1)
         if self.bias is not None:
-            jacobian = torch.cat([jacobian, out_identity.unsqueeze(0).expand(b,-1,-1)], dim=2)
+            jacobian = torch.cat([jacobian, out_identity.unsqueeze(0).expand(b, -1, -1)], dim=2)
         return jacobian
-        
+
     def _jacobian_wrt_input_sandwich(
         self, x: Tensor, val: Tensor, tmp: Tensor, diag_inp: bool = False, diag_out: bool = False
     ) -> Tensor:
@@ -112,52 +112,42 @@ class Linear(AbstractJacobian, nn.Linear):
             return self._jacobian_wrt_weight_sandwich_diag_to_full(x, val, tmp)
         elif diag_inp and diag_out:
             return self._jacobian_wrt_weight_sandwich_diag_to_diag(x, val, tmp)
-    
-    def _jacobian_wrt_input_sandwich_full_to_full(
-        self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+
+    def _jacobian_wrt_input_sandwich_full_to_full(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
         return torch.einsum("nm,bnj,jk->bmk", self.weight, tmp, self.weight)
 
-    def _jacobian_wrt_input_sandwich_full_to_diag(
-        self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+    def _jacobian_wrt_input_sandwich_full_to_diag(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
         return torch.einsum("nm,bnj,jm->bm", self.weight, tmp, self.weight)
 
-    def _jacobian_wrt_input_sandwich_diag_to_full(
-        self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
+    def _jacobian_wrt_input_sandwich_diag_to_full(self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
         return torch.einsum("nm,bn,nk->bmk", self.weight, tmp_diag, self.weight)
 
-    def _jacobian_wrt_input_sandwich_diag_to_diag(
-        self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
+    def _jacobian_wrt_input_sandwich_diag_to_diag(self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
         return torch.einsum("nm,bn,nm->bm", self.weight, tmp_diag, self.weight)
-    
-    def _jacobian_wrt_weight_sandwich_full_to_full(
-        self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
-        jacobian = self._jacobian_wrt_weight(x,val)
-        return torch.einsum('bji,bjk,bkq->biq', jacobian, tmp, jacobian)
 
-    def _jacobian_wrt_weight_sandwich_full_to_diag(
-        self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+    def _jacobian_wrt_weight_sandwich_full_to_full(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
+        jacobian = self._jacobian_wrt_weight(x, val)
+        return torch.einsum("bji,bjk,bkq->biq", jacobian, tmp, jacobian)
+
+    def _jacobian_wrt_weight_sandwich_full_to_diag(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
         tmp_diag = torch.diagonal(tmp, dim1=1, dim2=2)
         return self._jacobian_wrt_weight_sandwich_diag_to_diag(x, val, tmp_diag)
-        
-    def _jacobian_wrt_weight_sandwich_diag_to_full(
-        self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
-        jacobian = self._jacobian_wrt_weight(x,val)
-        return torch.einsum('bji,bj,bjq->biq', jacobian, tmp_diag, jacobian)
 
-    def _jacobian_wrt_weight_sandwich_diag_to_diag(
-        self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
+    def _jacobian_wrt_weight_sandwich_diag_to_full(self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
+        jacobian = self._jacobian_wrt_weight(x, val)
+        return torch.einsum("bji,bj,bjq->biq", jacobian, tmp_diag, jacobian)
+
+    def _jacobian_wrt_weight_sandwich_diag_to_diag(self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
 
         b, c1 = x.shape
         c2 = val.shape[1]
 
-        Jt_tmp_J = torch.bmm(tmp_diag.unsqueeze(2), (x**2).unsqueeze(1)).view(b, c1*c2)
+        Jt_tmp_J = torch.bmm(tmp_diag.unsqueeze(2), (x**2).unsqueeze(1)).view(b, c1 * c2)
 
         if self.bias is not None:
             Jt_tmp_J = torch.cat([Jt_tmp_J, tmp_diag], dim=1)
 
         return Jt_tmp_J
-
-
 
 
 class PosLinear(AbstractJacobian, nn.Linear):
@@ -212,45 +202,45 @@ class Upsample(AbstractJacobian, nn.Upsample):
         b, c1, h1, w1 = x.shape
         c2, h2, w2 = val.shape[1:]
 
-        assert c1==c2
+        assert c1 == c2
 
         weight = torch.ones(1, 1, int(self.scale_factor), int(self.scale_factor), device=x.device)
 
-        tmp = tmp.reshape(b, c2, h2*w2, c2, h2*w2)
-        tmp = tmp.movedim(2,3)
+        tmp = tmp.reshape(b, c2, h2 * w2, c2, h2 * w2)
+        tmp = tmp.movedim(2, 3)
         tmp_J = F.conv2d(
-            tmp.reshape(b*c2*c2 * h2*w2, 1, h2, w2),
+            tmp.reshape(b * c2 * c2 * h2 * w2, 1, h2, w2),
             weight=weight,
             bias=None,
             stride=int(self.scale_factor),
             padding=0,
             dilation=1,
             groups=1,
-        ).reshape(b*c2*c2, h2*w2, h1*w1)
+        ).reshape(b * c2 * c2, h2 * w2, h1 * w1)
 
-        Jt_tmpt = tmp_J.movedim(-1,-2)
+        Jt_tmpt = tmp_J.movedim(-1, -2)
 
         Jt_tmpt_J = F.conv2d(
-            Jt_tmpt.reshape(b*c2*c2 * h1*w1, 1, h2, w2),
+            Jt_tmpt.reshape(b * c2 * c2 * h1 * w1, 1, h2, w2),
             weight=weight,
             bias=None,
             stride=int(self.scale_factor),
             padding=0,
             dilation=1,
             groups=1,
-        ).reshape(b*c2*c2, h1*w1, h1*w1)
+        ).reshape(b * c2 * c2, h1 * w1, h1 * w1)
 
-        Jt_tmp_J = Jt_tmpt_J.movedim(-1,-2)
+        Jt_tmp_J = Jt_tmpt_J.movedim(-1, -2)
 
-        Jt_tmp_J = Jt_tmp_J.reshape(b, c2, c2, h1*w1, h1*w1)
-        Jt_tmp_J = Jt_tmp_J.movedim(2,3)
-        Jt_tmp_J = Jt_tmp_J.reshape(b, c2*h1*w1, c2*h1*w1)
+        Jt_tmp_J = Jt_tmp_J.reshape(b, c2, c2, h1 * w1, h1 * w1)
+        Jt_tmp_J = Jt_tmp_J.movedim(2, 3)
+        Jt_tmp_J = Jt_tmp_J.reshape(b, c2 * h1 * w1, c2 * h1 * w1)
 
         return Jt_tmp_J
 
     def _jacobian_wrt_input_sandwich_full_to_diag(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
         raise NotImplementedError
-    
+
     def _jacobian_wrt_input_sandwich_diag_to_full(self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
         raise NotImplementedError
 
@@ -271,6 +261,7 @@ class Upsample(AbstractJacobian, nn.Upsample):
         )
 
         return tmp_diag.reshape(b, c1 * h1 * w1)
+
 
 class Conv1d(AbstractJacobian, nn.Conv1d):
     def _jacobian_wrt_input_mult_left_vec(self, x: Tensor, val: Tensor, jac_in: Tensor) -> Tensor:
@@ -668,7 +659,6 @@ class Conv2d(AbstractJacobian, nn.Conv2d):
         diag_Jt_tmp_J = output_tmp.reshape(b, c1 * h1 * w1)
         return diag_Jt_tmp_J
 
-
     def _jacobian_wrt_weight_sandwich_full_to_full(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
         return self._jacobian_wrt_weight_mult_left(
             x, val, self._jacobian_wrt_weight_T_mult_right(x, val, tmp)
@@ -677,7 +667,7 @@ class Conv2d(AbstractJacobian, nn.Conv2d):
     def _jacobian_wrt_weight_sandwich_full_to_diag(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
         ### TODO: Implement this in a smarter way
         return torch.diagonal(self._jacobian_wrt_weight_sandwich_full_to_full(x, val, tmp), dim1=1, dim2=2)
-    
+
     def _jacobian_wrt_weight_sandwich_diag_to_full(self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:
         raise NotImplementedError
 
@@ -695,12 +685,11 @@ class Conv2d(AbstractJacobian, nn.Conv2d):
 
         # define moving sum for Jt_tmp
         output_tmp = torch.zeros(b, c2 * c1 * kernel_h * kernel_w, device=x.device)
+        flip_squared_input = torch.flip(x, [-3, -2, -1]).movedim(0, 1) ** 2
+
         for i in range(b):
             # set the weight to the convolution
-            input_single_batch = x[i : i + 1, :, :, :]
-            reversed_input_single_batch = torch.flip(input_single_batch, [-3, -2, -1]).movedim(0, 1)
-            weigth_sq = reversed_input_single_batch**2
-
+            weigth_sq = flip_squared_input[:, i : i + 1, :, :]
             input_tmp_single_batch = input_tmp[:, i : i + 1, :, :]
 
             output_tmp_single_batch = (
@@ -976,26 +965,32 @@ class MaxPool2d(AbstractJacobian, nn.MaxPool2d):
     def _jacobian_wrt_input_sandwich_full_to_full(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
         b, c1, h1, w1 = x.shape
         c2, h2, w2 = val.shape[1:]
-        assert c1==c2
+        assert c1 == c2
 
-        tmp = tmp.reshape(b, c1, h2*w2, c1, h2*w2).movedim(-2,-3).reshape(b*c1*c1, h2*w2, h2*w2)
-        Jt_tmp_J = torch.zeros((b*c1*c1, h1*w1, h1*w1), device=tmp.device)
+        tmp = tmp.reshape(b, c1, h2 * w2, c1, h2 * w2).movedim(-2, -3).reshape(b * c1 * c1, h2 * w2, h2 * w2)
+        Jt_tmp_J = torch.zeros((b * c1 * c1, h1 * w1, h1 * w1), device=tmp.device)
         # indexes for batch and channel
-        arange_repeated = torch.repeat_interleave(torch.arange(b*c1*c1), h2*w2 * h2*w2).long()
-        arange_repeated = arange_repeated.reshape(b*c1*c1, h2*w2, h2*w2)
+        arange_repeated = torch.repeat_interleave(torch.arange(b * c1 * c1), h2 * w2 * h2 * w2).long()
+        arange_repeated = arange_repeated.reshape(b * c1 * c1, h2 * w2, h2 * w2)
         # indexes for height and width
-        idx = self.idx.reshape(b, c1, h2 * w2).unsqueeze(2).expand(-1, -1, h2*w2, -1)
-        idx_col = idx.unsqueeze(1).expand(-1, c1, -1, -1, -1).reshape(b*c1*c1, h2*w2, h2*w2)
-        idx_row = idx.unsqueeze(2).expand(-1, -1, c1, -1, -1).reshape(b*c1*c1, h2*w2, h2*w2).movedim(-1,-2)
-        
+        idx = self.idx.reshape(b, c1, h2 * w2).unsqueeze(2).expand(-1, -1, h2 * w2, -1)
+        idx_col = idx.unsqueeze(1).expand(-1, c1, -1, -1, -1).reshape(b * c1 * c1, h2 * w2, h2 * w2)
+        idx_row = (
+            idx.unsqueeze(2).expand(-1, -1, c1, -1, -1).reshape(b * c1 * c1, h2 * w2, h2 * w2).movedim(-1, -2)
+        )
+
         Jt_tmp_J[arange_repeated, idx_row, idx_col] = tmp
-        Jt_tmp_J = Jt_tmp_J.reshape(b, c1, c1, h1*w1, h1*w1).movedim(-2,-3).reshape(b, c1*h1*w1, c1*h1*w1)
+        Jt_tmp_J = (
+            Jt_tmp_J.reshape(b, c1, c1, h1 * w1, h1 * w1)
+            .movedim(-2, -3)
+            .reshape(b, c1 * h1 * w1, c1 * h1 * w1)
+        )
 
         return Jt_tmp_J
 
     def _jacobian_wrt_input_sandwich_full_to_diag(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
         raise NotImplementedError
-    
+
     def _jacobian_wrt_input_sandwich_diag_to_full(self, x: Tensor, val: Tensor, diag_tmp: Tensor) -> Tensor:
         raise NotImplementedError
 
@@ -1125,7 +1120,7 @@ class Tanh(AbstractActivationJacobian, nn.Tanh):
         jac = torch.diag_embed(jac.view(x.shape[0], -1))
         tmp = torch.einsum("bnm,bnj,bjk->bmk", jac, tmp, jac)
         return tmp
-    
+
     def _jacobian_wrt_input_sandwich_full_to_diag(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
         jac = self._jacobian(x, val)
         jac = torch.diag_embed(jac.view(x.shape[0], -1))

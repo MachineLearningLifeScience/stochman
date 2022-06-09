@@ -665,7 +665,7 @@ class Conv2d(AbstractJacobian, nn.Conv2d):
         )
 
     def _jacobian_wrt_weight_sandwich_full_to_diag(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
-        ### TODO: Implement this in a smarter way
+        # TODO: Implement this in a smarter way
         return torch.diagonal(self._jacobian_wrt_weight_sandwich_full_to_full(x, val, tmp), dim1=1, dim2=2)
 
     def _jacobian_wrt_weight_sandwich_diag_to_full(self, x: Tensor, val: Tensor, tmp_diag: Tensor) -> Tensor:

@@ -113,7 +113,7 @@ class TestCurves:
         assert isinstance(curve_length, torch.Tensor)
         assert new_t.shape == (batch_size, timesteps)
         assert Ct.shape == (batch_size, timesteps, dim)
-        assert curve_length.shape == (batch_size, )
+        assert curve_length.shape == (batch_size,)
 
     def test_plotting_in_axis(self, curve_class):
         batch_size = 5

@@ -11,7 +11,7 @@ class __Dist2__(torch.autograd.Function):
             dist2 = dist**2
 
             lm0 = C.deriv(torch.zeros(1, device=p0.device)).squeeze(1)  # log(p0, p1); Bx(d)
-            lm1 = -C.deriv(torch.ones(1, device=p0.device)).squeeze(1)   # log(p1, p0); Bx(d)
+            lm1 = -C.deriv(torch.ones(1, device=p0.device)).squeeze(1)  # log(p1, p0); Bx(d)
             G0 = M.metric(p0)  # Bx(d)x(d) or Bx(d)
             G1 = M.metric(p1)  # Bx(d)x(d) or Bx(d)
             if G0.ndim == 3:  # metric is square
@@ -32,9 +32,7 @@ class __Dist2__(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         Glm0, Glm1 = ctx.saved_tensors
-        return (None,
-                2.0 * grad_output.view(-1, 1) * Glm0,
-                2.0 * grad_output.view(-1, 1) * Glm1)
+        return (None, 2.0 * grad_output.view(-1, 1) * Glm0, 2.0 * grad_output.view(-1, 1) * Glm1)
 
 
 def squared_manifold_distance(manifold, p0: torch.Tensor, p1: torch.Tensor):
@@ -53,9 +51,9 @@ def squared_manifold_distance(manifold, p0: torch.Tensor, p1: torch.Tensor):
 
 
 def tensor_reduction(x: torch.Tensor, reduction: str):
-    if reduction == 'sum':
+    if reduction == "sum":
         return x.sum()
-    elif reduction == 'mean':
+    elif reduction == "mean":
         return x.mean()
     elif reduction is None or reduction == "none":
         return x

@@ -712,7 +712,7 @@ class Conv2d(AbstractJacobian, nn.Conv2d):
             output_tmp[i, :] = output_tmp_single_batch
 
         if self.bias is not None:
-            bias_term = tmp_diag.reshape(b, c2, h2*w2)
+            bias_term = tmp_diag.reshape(b, c2, h2 * w2)
             bias_term = torch.sum(bias_term, 2)
             output_tmp = torch.cat([output_tmp, bias_term], dim=1)
 

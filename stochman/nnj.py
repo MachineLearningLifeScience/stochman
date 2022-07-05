@@ -45,9 +45,14 @@ class L2Norm(nn.Module):
         norm = torch.norm(x, p=2, dim=1)
 
         out = torch.einsum("bi,bj->bij", x, x)
-        out = torch.einsum("b,bij->bij", 1 / (norm**3 + 1e-6),out)
-        out = torch.einsum("b,bij->bij", 1 / (norm + 1e-6), torch.diag(torch.ones(d, device=x.device)).expand(b, d, d)) - out
-        
+        out = torch.einsum("b,bij->bij", 1 / (norm**3 + 1e-6), out)
+        out = (
+            torch.einsum(
+                "b,bij->bij", 1 / (norm + 1e-6), torch.diag(torch.ones(d, device=x.device)).expand(b, d, d)
+            )
+            - out
+        )
+
         return out
 
     def _jacobian_wrt_input_sandwich_full_to_full(self, x: Tensor, val: Tensor, tmp: Tensor) -> Tensor:
@@ -55,15 +60,16 @@ class L2Norm(nn.Module):
         return torch.einsum("bij,bik,bkl->bjl", jacobian, tmp, jacobian)
 
     def _jacobian_wrt_input_sandwich(
-            self, x: Tensor, val: Tensor, tmp: Tensor, diag_inp: bool = False, diag_out: bool = False
-        ) -> Tensor:
-            if not diag_inp and not diag_out:
-                return self._jacobian_wrt_input_sandwich_full_to_full(x, val, tmp)
-            else:
-                raise NotImplementedError
+        self, x: Tensor, val: Tensor, tmp: Tensor, diag_inp: bool = False, diag_out: bool = False
+    ) -> Tensor:
+        if not diag_inp and not diag_out:
+            return self._jacobian_wrt_input_sandwich_full_to_full(x, val, tmp)
+        else:
+            raise NotImplementedError
 
-    def _jacobian_wrt_weight_sandwich(self, x: Tensor, val: Tensor, tmp: Tensor, diag_inp: bool = False, diag_out: bool = False
-        ) -> Tensor:
+    def _jacobian_wrt_weight_sandwich(
+        self, x: Tensor, val: Tensor, tmp: Tensor, diag_inp: bool = False, diag_out: bool = False
+    ) -> Tensor:
         return None
 
 

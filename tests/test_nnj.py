@@ -169,3 +169,13 @@ class TestJacobian:
         else:
             assert isinstance(output, torch.Tensor)
             assert str(output.device) == device
+
+
+def test_jac_works_in_separate_sequentials():
+    """Tests if you can provide a Jacobian tensor as a kwarg"""
+    first_sequential = nnj.Sequential(nnj.Linear(3, 2), nnj.Tanh())
+    second_sequential = nnj.Sequential(nnj.Linear(2, 1), nnj.Tanh())
+
+    inputs = torch.randn((10, 3))
+    hidden_values, first_jacobian = first_sequential(inputs, jacobian=True)
+    _, _ = second_sequential(hidden_values, jacobian=first_jacobian)

@@ -85,14 +85,14 @@ class Sequential(nn.Sequential):
     def forward(
         self, x: Tensor, jacobian: Union[Tensor, bool] = False
     ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
-        if jacobian:
+        if not (jacobian is False):
             j = identity(x) if (not isinstance(jacobian, Tensor) and jacobian) else jacobian
         for module in self._modules.values():
             val = module(x)
-            if jacobian:
+            if not (jacobian is False):
                 j = module._jacobian_wrt_input_mult_left_vec(x, val, j)
             x = val
-        if jacobian:
+        if not (jacobian is False):
             return x, j
         return x
 

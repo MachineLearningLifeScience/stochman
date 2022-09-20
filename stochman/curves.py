@@ -318,7 +318,8 @@ class CubicSpline(BasicCurve):
 
         if params is None:
             params = torch.zeros(
-                self.begin.shape[0], self.basis.shape[1], self.begin.shape[1], dtype=self.begin.dtype, device=self.begin.device
+                self.begin.shape[0], self.basis.shape[1], self.begin.shape[1],
+                dtype=self.begin.dtype, device=self.begin.device
             )
         else:
             params = params.unsqueeze(0) if params.ndim == 2 else params

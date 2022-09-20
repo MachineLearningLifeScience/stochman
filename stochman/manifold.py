@@ -16,7 +16,7 @@ class Manifold(ABC):
     from this abstract base class abstraction.
     """
 
-    def curve_energy(self, curve: BasicCurve, reduction: Optional[str] = "sum") -> torch.Tensor:
+    def curve_energy(self, curve: torch.Tensor, reduction: Optional[str] = "sum") -> torch.Tensor:
         """
         Compute the discrete energy of a given curve.
 
@@ -46,7 +46,7 @@ class Manifold(ABC):
         energy = self.inner(curve[:, :-1].reshape(-1, d), flat_delta, flat_delta)  # B*(N-1)
         return tensor_reduction(energy, reduction)
 
-    def curve_length(self, curve: BasicCurve) -> torch.Tensor:
+    def curve_length(self, curve: torch.Tensor) -> torch.Tensor:
         """
         Compute the discrete length of a given curve.
 
@@ -447,7 +447,7 @@ class EmbeddedManifold(Manifold, ABC):
         energy = (delta**2).sum((1, 2)) * dt  # B
         return tensor_reduction(energy, reduction)
 
-    def curve_length(self, curve: BasicCurve, dt=None):
+    def curve_length(self, curve: torch.Tensor, dt=None):
         """
         Compute the discrete length of a given curve.
 

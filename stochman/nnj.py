@@ -1,5 +1,4 @@
 from builtins import breakpoint
-from math import prod
 from typing import Optional, Tuple, Union
 
 import torch
@@ -19,7 +18,7 @@ class Identity(nn.Module):
         if jacobian:
             xs = x.shape
             jac = (
-                torch.eye(prod(xs[1:]), prod(xs[1:]), dtype=x.dtype, device=x.device)
+                torch.eye(xs[1:].numel(), xs[1:].numel(), dtype=x.dtype, device=x.device)
                 .repeat(xs[0], 1, 1)
                 .reshape(xs[0], *xs[1:], *xs[1:])
             )

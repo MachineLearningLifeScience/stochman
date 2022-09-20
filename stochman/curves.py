@@ -313,12 +313,12 @@ class CubicSpline(BasicCurve):
 
     def _init_params(self, basis, params) -> None:
         if basis is None:
-            basis = self._compute_basis(num_edges=self._num_nodes - 1)
+            basis = self._compute_basis(num_edges=self._num_nodes - 1).to(self.begin.device)
         self.register_buffer("basis", basis)
 
         if params is None:
             params = torch.zeros(
-                self.begin.shape[0], self.basis.shape[1], self.begin.shape[1], dtype=self.begin.dtype
+                self.begin.shape[0], self.basis.shape[1], self.begin.shape[1], dtype=self.begin.dtype, device=self.begin.device
             )
         else:
             params = params.unsqueeze(0) if params.ndim == 2 else params

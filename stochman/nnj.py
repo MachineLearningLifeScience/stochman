@@ -73,13 +73,13 @@ class L2Norm(nn.Module):
 
 
 def identity(x: Tensor) -> Tensor:
-    """Function that for a given input x returns the corresponding identity jacobian matrix"""
+    """Function that for a given input x returns the corresponding identity Jacobian matrix"""
     m = Identity()
     return m(x, jacobian=True)[1]
 
 
 class Sequential(nn.Sequential):
-    """Subclass of sequential that also supports calculating the jacobian through an network"""
+    """Subclass of sequential that also supports calculating the Jacobian through an network"""
 
     def forward(
         self, x: Tensor, jacobian: Union[Tensor, bool] = False
@@ -414,7 +414,7 @@ class Conv2d(AbstractJacobian, nn.Conv2d):
 
         reversed_inputs = torch.flip(x, [-2, -1]).movedim(0, 1)
 
-        # convolve each base element and compute the jacobian
+        # convolve each base element and compute the Jacobian
         jacobian = (
             F.conv_transpose2d(
                 output_identity.movedim((1, 2, 3), (-3, -2, -1)).reshape(-1, c1, kernel_h, kernel_w),
@@ -920,21 +920,21 @@ class Softmax(AbstractActivationJacobian, nn.Softmax):
 
 
 class BatchNorm1d(AbstractActivationJacobian, nn.BatchNorm1d):
-    # only implements jacobian during testing
+    # only implements Jacobian during testing
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = (self.weight / (self.running_var + self.eps).sqrt()).unsqueeze(0)
         return jac
 
 
 class BatchNorm2d(AbstractActivationJacobian, nn.BatchNorm2d):
-    # only implements jacobian during testing
+    # only implements Jacobian during testing
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = (self.weight / (self.running_var + self.eps).sqrt()).unsqueeze(0)
         return jac
 
 
 class BatchNorm3d(AbstractActivationJacobian, nn.BatchNorm3d):
-    # only implements jacobian during testing
+    # only implements Jacobian during testing
     def _jacobian(self, x: Tensor, val: Tensor) -> Tensor:
         jac = (self.weight / (self.running_var + self.eps).sqrt()).unsqueeze(0)
         return jac

@@ -32,7 +32,7 @@ import numpy as np
 from stochman.manifold import StatisticalManifold
 from stochman.discretized_manifold import DiscretizedManifold
 
-from vae_motion import VAE_Motion
+from vae_motion import VAE_motion
 from vmf import VonMisesFisher
 from data_utils import load_bones_data
 
@@ -62,7 +62,7 @@ class TranslatedSigmoid(nn.Module):
         return val
 
 
-class VAE_motion_UQ(VAE_Motion):
+class VAE_motion_with_UQ(VAE_motion):
     def __init__(self, training_data: torch.Tensor, n_bones: int, n_hidden: int, radii: torch.Tensor) -> None:
         super().__init__(2, n_bones, n_hidden, radii)
 
@@ -110,32 +110,39 @@ class VAE_motion_UQ(VAE_Motion):
 
         return min_dist.view(zsh[:-1])
 
-    def reweight(self, z: torch.Tensor) -> torch.Tensor:
-        """
-        An alternate version of the decoder that pushes
-        k to self.limit_k away of the support of the
-        data. See Eq. 27 of [1, Sec. C.2.].
-        """
-        zsh = z.shape
-        z = z.reshape(-1, zsh[-1])
-        dec_mu, dec_k = super().decode(z)  # Nx(num_bones)x3, Nx(num_bones)
-
-        # Distance to the supp.
-        alpha = self.translated_sigmoid(self.min_distance(z)).unsqueeze(-1)
-
-        reweighted_k = (1 - alpha) * dec_k + alpha * (torch.ones_like(dec_k) * self.limit_k)
-
-        mush = dec_mu.shape
-        ksh = dec_k.shape
-        return dec_mu.view(zsh[:-1] + mush[1:]), reweighted_k.view(zsh[:-1] + ksh[1:])
-
     def decode(self, z, reweight=True) -> VonMisesFisher:
         if reweight:
-            mu, k = self.reweight(z)
-        else:
-            mu, k = super().decode(z)
+            zsh = z.shape
 
-        return VonMisesFisher(loc=mu, scale=k)
+            # Flattening extra dimensions that might appear
+            # in the latent codes.
+            z = z.reshape(-1, zsh[-1])
+
+            # Getting what the network originally learned
+            original_vMF_dist = super().decode(z)
+            dec_mu = original_vMF_dist.loc
+            dec_k = original_vMF_dist.scale
+
+            # Computing the distance to the support of the data
+            # using the translated sigmoid.
+            # 0 close to support, 1 away from it
+            d_to_supp = self.translated_sigmoid(self.min_distance(z)).unsqueeze(-1)
+
+            # Replacing the concentration to be more
+            # uncertain away from the data.
+            reweighted_k = (1 - d_to_supp) * dec_k + d_to_supp * (torch.ones_like(dec_k) * self.limit_k)
+
+            # Defining a new vMF with calibrated uncertainties
+            mush = dec_mu.shape
+            ksh = dec_k.shape
+            vMF = VonMisesFisher(
+                loc=dec_mu.view(zsh[:-1] + mush[1:]),
+                scale=reweighted_k.view(zsh[:-1] + ksh[1:]),
+            )
+        else:
+            vMF = super().decode(z)
+
+        return vMF
 
     def forward(self, x):
         """
@@ -161,7 +168,7 @@ class VAE_motion_UQ(VAE_Motion):
 
         return x, p_mu, p_k.unsqueeze(2), q_mu, q_var
 
-    def plot_latent_space(self, ax=None):
+    def plot_latent_space(self, ax=None, reweight=True):
         """
         Visualizes the latent space, illuminating it with
         the average concentration parameter of the decoded
@@ -181,7 +188,7 @@ class VAE_motion_UQ(VAE_Motion):
         positions = {
             (x.item(), y.item()): (i, j) for j, x in enumerate(z1) for i, y in enumerate(reversed(z2))
         }
-        decoded_dist = self.decode(zs)
+        decoded_dist = self.decode(zs, reweight=reweight)
         ks = decoded_dist.scale
         ks = ks.detach().numpy()
         mean_ks = np.mean(ks, axis=1)
@@ -193,7 +200,7 @@ class VAE_motion_UQ(VAE_Motion):
             _, ax = plt.subplots(1, 1)
 
         ax.scatter(encodings[:, 0], encodings[:, 1], s=8, alpha=0.75, c="k", edgecolors="white")
-        plot = ax.imshow(K, extent=[*x_lims, *y_lims], cmap="Blues_r")
+        plot = ax.imshow(K, extent=[*x_lims, *y_lims], cmap="Blues_r", vmin=0.0, vmax=450.0)
         plt.colorbar(plot, ax=ax, fraction=0.046, pad=0.04)
 
 
@@ -205,7 +212,7 @@ if __name__ == "__main__":
 
     # Loading the model.
     n_hidden = 30
-    vae_uq = VAE_motion_UQ(train_dataset.tensors[0], n_bones, n_hidden, radii)
+    vae_uq = VAE_motion_with_UQ(train_dataset.tensors[0], n_bones, n_hidden, radii)
     vae_uq.load_state_dict(torch.load(MODELS_DIR / "motion_2.pt"))
 
     # Calibrating its uncertainty. In this example, we extrapolate to uncertain
@@ -221,6 +228,11 @@ if __name__ == "__main__":
     grid = [torch.linspace(-2.5, 2.5, 50), torch.linspace(-2.5, 2.5, 50)]
     discrete_manifold_approximation = DiscretizedManifold()
     discrete_manifold_approximation.fit(vae_manifold, grid)
+
+    # Visualizing before the calibration of UQ
+    fig, ax = plt.subplots(1, 1, figsize=(7, 7))
+    vae_uq.plot_latent_space(ax=ax, reweight=False)
+    ax.axis("off")
 
     # Visualizing the latent space and several geodesics.
     fig, ax = plt.subplots(1, 1, figsize=(7, 7))

@@ -7,7 +7,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 
-from vae_motion import VAE_Motion
+from vae_motion import VAE_motion
 from data_utils import load_bones_data
 
 filepath = Path(__file__).parent.absolute()
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     n_bones = len(bones)
 
     # Loads up the model.
-    model = VAE_Motion(2, n_bones=n_bones, n_hidden=n_hidden, radii=radii)
+    model = VAE_motion(2, n_bones=n_bones, n_hidden=n_hidden, radii=radii)
     print(model)
 
     # Trains

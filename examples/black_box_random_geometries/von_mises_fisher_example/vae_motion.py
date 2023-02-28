@@ -13,13 +13,13 @@ from stochman.manifold import StatisticalManifold
 from stochman.nnj import Norm2
 
 
-class VAE_Motion(torch.nn.Module):
+class VAE_motion(torch.nn.Module):
     """
-    A modified version of Dimitris' vMFVAE, for multiple bones.
+    A VAE that decodes to a product of vMF distriutions
     """
 
     def __init__(self, latent_dim, n_bones=30, n_hidden=30, radii=None):
-        super(VAE_Motion, self).__init__()
+        super(VAE_motion, self).__init__()
 
         self.latent_dim = latent_dim
         self.n_bones = n_bones
@@ -68,22 +68,31 @@ class VAE_Motion(torch.nn.Module):
     def reparameterize_enc(self, mu, var):
         return mu + var.sqrt() * torch.randn_like(var)
 
-    def decode(self, z):
+    def decode(self, z) -> VonMisesFisher:
         """
         Returns the parameters mu and k of
         the decoded vMF distribution.
         """
+        # A hidden layer of the decoder
         h = self.decoder(z)
+
+        # A layer that learns the mean of the vMF
         mu = self.dec_mu(h)
+
+        # Reshaping it to b x n_bones x 3, and normalizing
+        # it so that it lives in the sphere
         batch_size, inp = mu.shape
         mu = mu.view(batch_size, inp // 3, 3)
-        k = self.dec_k(h) + 0.01  # avoid collapses and singularities
-
-        # Normalizes the mean.
         norm_mu = self.norm_2(mu).sqrt()
         mu = torch.div(mu, norm_mu)
 
-        return mu, k
+        # A layer that learns the concentration of the vMF
+        k = self.dec_k(h) + 0.01  # avoid collapses and singularities
+
+        # Building a product of n_bones independent
+        # distributions.
+        vMF = VonMisesFisher(loc=mu, scale=k)
+        return vMF
 
     def forward(self, x):
         """
@@ -104,7 +113,9 @@ class VAE_Motion(torch.nn.Module):
         z = self.reparameterize_enc(q_mu, q_var)
 
         # Decodes the samples
-        p_mu, p_k = self.decode(z)
+        vmf_dist = self.decode(z)
+        p_mu = vmf_dist.loc
+        p_k = vmf_dist.scale
 
         return x, p_mu, p_k.unsqueeze(2), q_mu, q_var
 

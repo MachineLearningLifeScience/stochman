@@ -2,7 +2,6 @@ from typing import List
 
 import torch
 import numpy as np
-from scipy.io import loadmat
 from torch.utils.data import TensorDataset
 
 

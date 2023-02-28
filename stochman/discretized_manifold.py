@@ -107,7 +107,12 @@ class DiscretizedManifold(Manifold):
                 #     weight = external_curve_length_function(model, line(t))
                 # else:
                 with torch.no_grad():
-                    weight = model.curve_length(line(t))
+                    # TODO: What if the model implements curve energy? Should
+                    # we prefer that?
+                    if hasattr(model, "curve_energy"):
+                        weight = model.curve_energy(line(t))
+                    else:
+                        weight = model.curve_length(line(t))
 
                 node_index1 = node_idx(x, y)
                 node_index2 = node_idx(xn, yn)

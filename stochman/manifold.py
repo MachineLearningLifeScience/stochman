@@ -663,16 +663,34 @@ class StatisticalManifold(Manifold):
         self.model = model
         assert "decode" in dir(model)
 
-    def curve_energy(self, curve: BasicCurve) -> torch.Tensor:
+    def curve_energy(self, curve: torch.Tensor) -> torch.Tensor:
         """
         Returns the curve energy in the statistical manifold, according
         to the pullback of the Fisher-Rao metric.
 
         See Pulling Back Information Geometry, Eq. (11) or Proposition A.2.
+
+        Input:
+            curve: a tensor containing the points of a batch of curves.
+                   We expect `curve` to be a b x n_t x 2 tensor, where b is
+                   the number of curves to evaluate, n_t is the number of points
+                   in the curve itself, and 2 is the dimension of the latent space.
+                   if the curve only has two shapes, a batch shape is unsqueezed.
+
+                   The reasoning behind this specific set-up: it is exactly what
+                   the DiscretizedManifold is expecting when fitting. See
+                   discretized_manifold.py for more details.
+
+        Output:
+            length: a tensor of shape (b,) containing the lengths of each
+                    of the curves.
         """
-        dt = (curve[:-1] - curve[1:]).pow(2).sum(dim=-1, keepdim=True)  # (N-1)x1
-        dist1 = self.model.decode(curve[:-1])
-        dist2 = self.model.decode(curve[1:])
+        if len(curve.shape) == 2:
+            curve = curve.unsqueeze(0)
+
+        dt = (curve[:, :-1] - curve[:, 1:]).pow(2).sum(dim=-1).sqrt().squeeze(1)  # b
+        dist1 = self.model.decode(curve[:, :-1, ...])
+        dist2 = self.model.decode(curve[:, 1:, ...])
 
         try:
             kl = kl_divergence(dist1, dist2)
@@ -681,17 +699,36 @@ class StatisticalManifold(Manifold):
             raise ValueError("Did you forget to register your KL?")
 
         # Prop. A.2. of Pulling back information geometry
-        return kl.sum() * (2 * (dt.mean() ** -1))
+        # Adding across all dimensions that aren't the batch
+        return torch.sum(kl.view(kl.shape[0], -1), dim=1) * (2 * (dt ** -1))
 
-    def curve_length(self, curve: BasicCurve) -> torch.Tensor:
+    def curve_length(self, curve: torch.Tensor) -> torch.Tensor:
         """
         Returns the curve length in the statistical manifold, according
         to the pullback of the Fisher-Rao metric.
 
         See Pulling Back Information Geometry, Eq. (10) or Proposition A.2.
+
+        Input:
+            curve: a tensor containing the points of a batch of curves.
+                   We expect `curve` to be a b x n_t x 2 tensor, where b is
+                   the number of curves to evaluate, n_t is the number of points
+                   in the curve itself, and 2 is the dimension of the latent space.
+                   if the curve only has two shapes, a batch shape is unsqueezed.
+
+                   The reasoning behind this specific set-up: it is exactly what
+                   the DiscretizedManifold is expecting when fitting. See
+                   discretized_manifold.py for more details.
+
+        Output:
+            length: a tensor of shape (b,) containing the lengths of each
+                    of the curves.
         """
-        dist1 = self.model.decode(curve[:-1])
-        dist2 = self.model.decode(curve[1:])
+        if len(curve.shape) == 2:
+            curve = curve.unsqueeze(0)
+
+        dist1 = self.model.decode(curve[:, :-1, ...])
+        dist2 = self.model.decode(curve[:, 1:, ...])
 
         try:
             kl = kl_divergence(dist1, dist2)
@@ -700,7 +737,8 @@ class StatisticalManifold(Manifold):
             raise ValueError("Did you forget to register your KL?")
 
         # Prop. A.2. of Pulling back information geometry
-        return torch.sqrt(2 * torch.sum(kl))
+        # Adding across all dimensions that aren't the batch
+        return torch.sqrt(2 * torch.sum(kl.view(kl.shape[0], -1), dim=1))
 
     def metric(self, points: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError

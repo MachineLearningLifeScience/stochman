@@ -18,7 +18,7 @@ class DiscretizedManifold(Manifold):
         self._diagonal_metric = False
         self._alpha = torch.Tensor()
 
-    def fit(self, model, grid, use_diagonals=True, batch_size=4, interpolation_noise=0.0):
+    def fit(self, model, grid, use_diagonals=True, batch_size=4, interpolation_noise=0.0, model_device=None):
         """
         Discretize a manifold to a given grid.
 
@@ -48,6 +48,11 @@ class DiscretizedManifold(Manifold):
                         this GP regressor can be tuned through the `interpolation_noise`
                         argument.
                         Default: 0.0.
+
+            model_device:
+                        The device on which the model is operating.
+                        This argument will be removed in the future.
+                        Default: None.
         """
         self.grid = grid
         self.grid_size = [g.numel() for g in grid]
@@ -99,7 +104,9 @@ class DiscretizedManifold(Manifold):
 
                 bs = x.shape[0]  # may be different from batch size for the last batch
 
-                line = CubicSpline(begin=torch.zeros(bs, dim), end=torch.ones(bs, dim), num_nodes=2)
+                line = CubicSpline(begin=torch.zeros(bs, dim, device=model_device),
+                                   end=torch.ones(bs, dim, device=model_device),
+                                   num_nodes=2)
                 line.begin = torch.cat([grid[0][x].view(-1, 1), grid[1][y].view(-1, 1)], dim=1)  # (bs)x2
                 line.end = torch.cat([grid[0][xn].view(-1, 1), grid[1][yn].view(-1, 1)], dim=1)  # (bs)x2
 
@@ -126,7 +133,7 @@ class DiscretizedManifold(Manifold):
             with torch.no_grad():
                 for x in range(xsize):
                     for y in range(ysize):
-                        p = torch.tensor([self.grid[0][x], self.grid[1][y]])
+                        p = torch.tensor([self.grid[0][x], self.grid[1][y]]).view(1, -1)
                         Mlist.append(model.metric(p))  # 1x(d)x(d) or 1x(d)
             M = torch.cat(Mlist, dim=0)  # (big)x(d)x(d) or (big)x(d)
             self._diagonal_metric = M.dim() == 2

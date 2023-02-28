@@ -20,7 +20,7 @@ class Manifold(ABC):
     - Add examples to show the differences between Manifold and EmbeddedManifold.
     """
 
-    def curve_energy(self, curve: BasicCurve, reduction: Optional[str] = "sum") -> torch.Tensor:
+    def curve_energy(self, curve: torch.Tensor, reduction: Optional[str] = "sum") -> torch.Tensor:
         """
         Compute the discrete energy of a given curve.
 
@@ -50,7 +50,7 @@ class Manifold(ABC):
         energy = self.inner(curve[:, :-1].reshape(-1, d), flat_delta, flat_delta)  # B*(N-1)
         return tensor_reduction(energy, reduction)
 
-    def curve_length(self, curve: BasicCurve) -> torch.Tensor:
+    def curve_length(self, curve: torch.Tensor) -> torch.Tensor:
         """
         Compute the discrete length of a given curve.
 
@@ -448,10 +448,10 @@ class EmbeddedManifold(Manifold, ABC):
         emb_curve = self.embed(curve)  # BxNxD
         B, N, D = emb_curve.shape
         delta = emb_curve[:, 1:, :] - emb_curve[:, :-1, :]  # Bx(N-1)xD
-        energy = (delta ** 2).sum((1, 2)) * dt  # B
+        energy = (delta**2).sum((1, 2)) * dt  # B
         return tensor_reduction(energy, reduction)
 
-    def curve_length(self, curve: BasicCurve, dt=None):
+    def curve_length(self, curve: torch.Tensor, dt=None):
         """
         Compute the discrete length of a given curve.
 
@@ -545,7 +545,7 @@ class LocalVarMetric(Manifold):
         """
         super().__init__()
         self.data = data
-        self.sigma2 = sigma ** 2
+        self.sigma2 = sigma**2
         self.rho = rho
         self.device = device
 
@@ -590,7 +590,7 @@ class LocalVarMetric(Manifold):
             if return_deriv:
                 weighted_delta = (w_p / sigma2).reshape(-1, 1).expand(-1, D) * delta  # NxD
                 dSdc = 2.0 * torch.diag(w_p.mm(delta).flatten()) - weighted_delta.t().mm(delta2)  # DxD
-                dM = dSdc.t() * (m ** 2).reshape(-1, 1).expand(-1, D)  # DxD
+                dM = dSdc.t() * (m**2).reshape(-1, 1).expand(-1, D)  # DxD
                 dMdc.append(dM.reshape(1, D, D))
 
         if return_deriv:

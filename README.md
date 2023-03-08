@@ -31,12 +31,12 @@ python setup.py install
 `StochMan` includes a number of modules that each defines a set of functionalities for
 working with manifold data.
 
-### `stochman.nnj`: `torch.nn` with jacobians
+### `stochman.nnj`: `torch.nn` with Jacobians
 
-Key to working with Riemannian geometry is the ability to compute jacobians. The jacobian matrix
+Key to working with Riemannian geometry is the ability to compute Jacobians. The Jacobian matrix
 contains the first order partial derivatives. `stochman.nnj` provides plug-in replacements for the many 
 used `torch.nn` layers such as `Linear`, `BatchNorm1d` etc. and commonly used activation functions such as `ReLU`,
-`Sigmoid` etc. that enables fast computations of jacobians between the input to the layer and the output. 
+`Sigmoid` etc. that enables fast computations of Jacobians between the input to the layer and the output. 
 
 ``` python
 import torch
@@ -47,7 +47,7 @@ model = nnj.Sequential(nnj.Linear(10, 5),
 x = torch.randn(100, 10)
 y, J = model(x, jacobian=True)
 print(y.shape) # output from model: torch.size([100, 5])
-print(J.shape) # jacobian between input and output: torch.size([100, 5, 10])
+print(J.shape) # Jacobian between input and output: torch.size([100, 5, 10])
 ```
 
 ### `stochman.manifold`: Interface for working with Riemannian manifolds

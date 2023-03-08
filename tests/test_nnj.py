@@ -19,7 +19,7 @@ _3d_conv_input_shape = (_batch_size, _features, _dims, _dims, _dims)
 
 
 def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
-    """Use pytorch build-in jacobian function to compare for correctness of computations"""
+    """Use pytorch build-in Jacobian function to compare for correctness of computations"""
     out = f(x)
     output = torch.autograd.functional.jacobian(f, x)
     m = out.ndim
@@ -139,7 +139,7 @@ def _compare_jacobian(f: Callable, x: torch.Tensor) -> torch.Tensor:
 class TestJacobian:
     @pytest.mark.parametrize("dtype", [torch.float, torch.double])
     def test_jacobians(self, model, input_shape, device, dtype):
-        """Test that the analytical jacobian of the model is consistent with finite
+        """Test that the analytical Jacobian of the model is consistent with finite
         order approximation
         """
         if "cuda" in device and not torch.cuda.is_available():
@@ -149,7 +149,7 @@ class TestJacobian:
         input = torch.randn(*input_shape, device=device, dtype=dtype)
         _, jac = model(input, jacobian=True)
         jacnum = _compare_jacobian(model, input).to(device)
-        assert torch.isclose(jac, jacnum, atol=1e-3).all(), "jacobians did not match"
+        assert torch.isclose(jac, jacnum, atol=1e-3).all(), "Jacobians did not match"
 
     @pytest.mark.parametrize("return_jac", [True, False])
     def test_jac_return(self, model, input_shape, device, return_jac):

@@ -389,19 +389,19 @@ class CubicSpline(BasicCurve):
             torch.arange(0.0, degree, dtype=t.dtype, device=self.device)
             .view(1, 1, -1)
             .expand(B, -1, -1)
-        )                                                                          # B x  1  x (degree)
-        tpow = t.view(B, -1, 1).pow(power)                                         # B x |t| x (degree)
-        coeffs_idx = torch.cat([coeffs[k, idx[k]].unsqueeze(0) for k in range(B)]) # B x |t| x (degree) x D
-        retval = tpow.unsqueeze(-1).expand(-1, -1, -1, D) * coeffs_idx             # B x |t| x (degree) x D
-        retval = torch.sum(retval, dim=2)                                          # B x |t| x D
-        return retval 
+        )                                                                           # B x  1  x (degree)
+        tpow = t.view(B, -1, 1).pow(power)                                          # B x |t| x (degree)
+        coeffs_idx = torch.cat([coeffs[k, idx[k]].unsqueeze(0) for k in range(B)])  # B x |t| x (degree) x D
+        retval = tpow.unsqueeze(-1).expand(-1, -1, -1, D) * coeffs_idx              # B x |t| x (degree) x D
+        retval = torch.sum(retval, dim=2)                                           # B x |t| x D
+        return retval
 
     def _eval_straight_line(self, t: torch.Tensor) -> torch.Tensor:
         B, T = t.shape
-        tt = t.view(B, T, 1)              # B x |t| x 1
-        begin = self.begin.unsqueeze(1)   # B x  1  x D
-        end   = self.end.unsqueeze(1)     # B x  1  x D
-        return (end - begin) * tt + begin # B x |t| x D
+        tt = t.view(B, T, 1)               # B x |t| x 1
+        begin = self.begin.unsqueeze(1)    # B x  1  x D
+        end = self.end.unsqueeze(1)        # B x  1  x D
+        return (end - begin) * tt + begin  # B x |t| x D
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
         coeffs = self._get_coeffs()  # Bx(num_edges)x4xD

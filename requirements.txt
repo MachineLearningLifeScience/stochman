@@ -1,4 +1,4 @@
 torch>=1.7
 numpy
-networkx
+networkx>=2.8.8
 matplotlib
